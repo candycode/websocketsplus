@@ -301,7 +301,7 @@ int WebSocketService::WSCallback(
                void *in,
                size_t len) {
     switch (reason) {
-        case LWS_CALLBACK_ESTABLISHED: {// just log message that someone is connecting
+        case LWS_CALLBACK_ESTABLISHED: {
             C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
             c->CreateBuffers(user);
             new (user) S(c);
