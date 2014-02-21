@@ -15,8 +15,14 @@ namespace wsp {
 
 using Protocols = std::vector< libwebsocket_protocols >;
 
+/*  NOTE:
+ *  weaker logging can be selected at configure time using --disable-debug
+ *  that gets rid of the overhead of checking while keeping _warn and _err
+ *  active
+ */
+
 //------------------------------------------------------------------------------
-//TYPE INTERFACES
+//REQUIRED TYPE INTERFACES
 //Context:
 //  vector< char >& GetBuffer(void* user, int bufferIndex);
 //  void CreateBuffers(void* user, int numberOfBuffer,
@@ -285,12 +291,6 @@ private:
     ///log level name -> libwebsockets' log level map
     const static std::map< std::string, lws_log_levels > levelNames_; 
 };
-
-/*
- *  weaker logging can be deselected at configure time using --disable-debug
- *  that gets rid of the overhead of checking while keeping _warn and _err
- *  active
- */
 
 template < typename C, typename S, WebSocketService::Type type>
 int WebSocketService::WSCallback(
