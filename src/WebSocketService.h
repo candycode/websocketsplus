@@ -40,6 +40,7 @@ using Protocols = std::vector< libwebsocket_protocols >;
 
 //-----------------------------------------------------------------------------
 /// libwebsockets wrapper: map your service to a protocol and call StartLoop
+/// Use only one single @c WebSocketService instance per process
 class WebSocketService {
 private:    
     ///Interface for user data deleter, used to delete the context instance
