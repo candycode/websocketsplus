@@ -133,6 +133,13 @@ public:
         userDataDeleter_.reset(new Deleter< ContextT >(
             reinterpret_cast< ContextT* >(info_.user)));
     }
+    ///Next iteration: performs a single loop iteration calling
+    ///libwebsocket_service
+    /// @param ms min execution time: if no sockets need service it
+    /// returns after @c ms milliseconds 
+    int Next(int ms = 0) {
+        return libwebsocket_service(context_, ms);
+    }
     ///Start event loop
     /// @tparam C continuation condition type
     /// @param ms minimum interval between consecutive iterations
@@ -141,7 +148,7 @@ public:
     template < typename C >
     void StartLoop(int ms, C&& c) {
         while(c()) {
-            libwebsocket_service(context_, ms);
+            Next(ms);
         }
     }
     /// Set log handler for specific log levels
