@@ -2,7 +2,7 @@
 //Test driver for WebSocketService and reference implementation of Context 
 //and Service interfaces
 //Interface requirements:
-//  * Context must provides reusable storage space to per-session service
+//  * Context must provide reusable storage space to per-session service
 //    instances to avoid reallocating memory at each request-reply
 //  * Service is a per-session instance which handles requests and replies
 //    through the Put and Get methods
@@ -127,8 +127,8 @@ int main(int, char**) {
     WSS::SetLogger("INFO", log);
     //init service
     ws.Init(9000, //port
-            nullptr, //ssl certificate path
-            nullptr, //ssl key path
+            nullptr, //SSL certificate path
+            nullptr, //SSL key path
             Context(), //context instance, will be copied internally
             //protocol->service mapping
             //sync request-reply: at each request a reply is immediately sent
