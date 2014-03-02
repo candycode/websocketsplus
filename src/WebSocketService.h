@@ -195,6 +195,12 @@ public:
         else return levels_.find(lws_log_levels(ll))->second;
     }
 private:
+    struct Sent {
+        int toSend = -1;
+        int sent = -1;
+        Sent(int ts, int s) : toSend(ts), sent(s) {}
+    };    
+private:
     ///Callback function passed to libwebsockets to receive log info
     static void LogLevel(int level, const char* msg) {
         loggers_[lws_log_levels(level)](level, msg);
@@ -234,15 +240,27 @@ private:
                size_t len);
     template < typename C, typename S >
     static void Send(libwebsocket_context *context,
-                     libwebsocket* wsi,
-                     void* user) {
+                    libwebsocket* wsi,
+                    void* user) {
         S* s = reinterpret_cast< S* >(user);
         if(!s->Data()) return;
         assert(s);
         C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
         assert(c);
         bool binary = false;
-        const std::vector< char >& b = s->Get(binary); 
+        const std::vector< char >& b = s->Get(binary); //Get(n, binary, done)
+        //no_buffer_all_partial_tx
+        //const char* b = s->Get(binary, chunksize, begin, done);
+        // if(begin) 
+        //     writeMode = LWS_WRITE_TEXT or binary
+        // else {
+        //     writeMode = LWS_WRITE_CONTINUATION;
+        //     if(!done) writeMode |= LWS_WRITE_NO_FIN;
+        // }
+        const size_t bytesToWrite = s->PreformattedBuffer() 
+                         ? LWS_SEND_BUFFER_PRE_PADDING + b.size() +
+                           LWS_SEND_BUFFER_POST_PADDING
+                         : b.size();  
         if(!s->PreformattedBuffer()) {
             if(b.empty()) return;
             std::vector< char >& buffer = c->GetBuffer(user, 0);
@@ -250,20 +268,22 @@ private:
                           LWS_SEND_BUFFER_POST_PADDING);
             std::copy(b.begin(), b.end(), buffer.begin() + LWS_SEND_BUFFER_PRE_PADDING);
 
-            libwebsocket_write(
-                             wsi, 
-                             (unsigned char*) &buffer[LWS_SEND_BUFFER_PRE_PADDING],
-                             b.size(),
-                             binary == false ? LWS_WRITE_TEXT 
-                                             : LWS_WRITE_BINARY);
+            bytesWritten = libwebsocket_write(
+                         wsi, 
+                         (unsigned char*) &buffer[LWS_SEND_BUFFER_PRE_PADDING],
+                         b.size(), //chunksize
+                         binary == false ? LWS_WRITE_TEXT 
+                                         : LWS_WRITE_BINARY);
         } else {
-            libwebsocket_write(
+            bytesWritten = libwebsocket_write(
                              wsi, 
                              (unsigned char*) &b[LWS_SEND_BUFFER_PRE_PADDING],
-                             s->BufferSize(),
+                             s->BufferSize(), //chunksize
                              binary == false ? LWS_WRITE_TEXT 
                                              : LWS_WRITE_BINARY); 
         }
+        if(bytesWritten != bytesToWrite) 
+            throw std::runtime_error("Send buffer underflow");
     }
     ///Release resources
     void Clear() {
@@ -320,10 +340,10 @@ int WebSocketService::WSCallback(
         break;
         case LWS_CALLBACK_PROTOCOL_INIT:
             break;
-        case LWS_CALLBACK_RECEIVE: { 
+        case LWS_CALLBACK_RECEIVE: { //libwebsockets_remaining_packet_payload
             reinterpret_cast< S* >(user)->Put(in, len);
             if(type == REQ_REP) {
-                Send< C, S >(context, wsi, user);    
+                Send< C, S >(context, wsi, user);
             }
         }
         break;
