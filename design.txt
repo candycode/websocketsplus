@@ -1,0 +1,37 @@
+
+Communication protocols
+-----------------------
+
+* REQ_REP: sync request-reply
+* ASYNC_REP: asynchronous reply
+* OUT_STREAM: write only
+* IN_STREAM: receive only
+
+Data handling
+-------------
+
+Receive, send models:
+
+* GREEDY: data are put or retrieved from service instance in a loop
+* ASYNC: data are put or retrieved from service instance once per libwebsockets
+         service iteration
+
+Receive: call service->Put(in, len, done)
+         multiple times with done == false until 
+         it is set to true when libwebsockets_remaining_packet_payloa returns 0
+
+         service->Put() is called multiple times in a loop in the case of
+         greedy receive or only once in the case of async receive
+
+Send: service->Get(len) returns a struct { 
+                                    const char* data;
+                                    int size;
+                                    int totalSize;
+                                    bool binary; 
+                                  }
+      len is the requested chunk size.
+      service->Get(len) is invoked multiple times until 
+      data + size == data + totalSize
+      size *must be* always <= len
+      if size is < len then output buffer is padded by invoking 
+      service->PadOutput(outPtr, len - size) 
