@@ -22,24 +22,27 @@ using Protocols = std::vector< libwebsocket_protocols >;
 //  void CreateBuffers(void* user, int numberOfBuffer,
 //                     size_t bufferSize, char initValue) 
 //  void RemoveBuffers(void* user)
+//  void InitProtocol(const char* name) //one time webscoket
+//                                      //protocol initialization
 //Service
 //  Service(Context)
-//  int GetSuggestedOutChunkSize()
-//  void SetSuggestedOutChunkSize(int)
-//  bool DoneWriting() 
+//  bool Data() if some data is available
 //  DataFrame Get(int requestedChunkLength)
-//  struct Data {
-//    const char* begin;
-//    const char* end;
-//    const char* current;
-//    int chunkSize
-//  };
-//  void PadOutput(char* begin, int length);
+//  struct DataFrame {
+//    const char* bufferBegin;
+//    const char* bufferEnd;
+//    const char* frameBegin;
+//    const char* frameEnd;
+//    bool binary;
+//  }; //DataFrame must be a member type of Service
+//  (void PadOutput(char* begin, int length);_ not required (yet?)
 //  void Put(void* buffer, size_t length, bool done)
 //  void Destroy() //should call ~Service
 //  bool PreformattedBuffer() true if already contains padding
-//  if PreformattedBuffer() returns true, or size of the internal buffer
-//  if PreformattedBuffer() returns false
+//  int GetSuggestedOutChunkSize()
+//  void SetSuggestedOutChunkSize(int)
+//  bool DoneWriting()
+//  void UpdateOutBuffer(DataFrame, bytesWritten) 
 
 
 //-----------------------------------------------------------------------------
@@ -309,7 +312,14 @@ private:
                                               : LWS_WRITE_TEXT; 
             if(!begin) writeMode = LWS_WRITE_CONTINUATION;
             if(!done) writeMode |= LWS_WRITE_NO_FIN;                
-            if(!s->PreformattedBuffer()) {
+            if(s->PreformattedBuffer()) {
+                bytesWritten = libwebsocket_write(
+                               wsi, 
+                               (unsigned char*) &b[LWS_SEND_BUFFER_PRE_PADDING],
+                               bytesToWrite, // <= padding + chunkSize
+                               writeMode);
+                                
+            } else {
                 std::vector< char >& buffer = c->GetBuffer(user, 0);
                 buffer.resize(LWS_SEND_BUFFER_PRE_PADDING + bsize +
                               LWS_SEND_BUFFER_POST_PADDING);
@@ -321,13 +331,6 @@ private:
                           (unsigned char*) &buffer[LWS_SEND_BUFFER_PRE_PADDING],
                           bytesToWrite, //<= chunkSize
                           writeMode);
-            } else {
-                bytesWritten = libwebsocket_write(
-                               wsi, 
-                               (unsigned char*) &b[LWS_SEND_BUFFER_PRE_PADDING],
-                               bytesToWrite, // <= padding + chunkSize
-                               writeMode);
-                                
             }
             if(bytesWritten < 0) 
                 throw std::runtime_error("Send error");
@@ -407,14 +410,14 @@ int WebSocketService::WSCallback(
                 s->Put(in, len, done);
                 if(sm != RecvMode::RECV_GREEDY) break;
             }
-            if((type == Type::REQ_REP || type == Type::PUB_SUB)
-               && done) {
+            if((type == Type::REQ_REP && done) {
                 const bool GREEDY_OPTION = sm == SendMode::SEND_GREEDY;
                 C* c = 
                   reinterpret_cast< C* >(libwebsocket_context_user(context));
                 if(!Send< C, S >(context, wsi, user, GREEDY_OPTION))
                     libwebsocket_callback_on_writable(context, wsi); 
-            } else if(type == Type::ASYNC_REP && done) {
+            } else if((type == Type::ASYNC_REP || type == Type::PUB_SUB)
+                      && done) {
                   libwebsocket_callback_on_writable(context, wsi); 
             }
         }
