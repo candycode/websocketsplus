@@ -43,7 +43,9 @@ public:
     void RemoveBuffers(void* p) {
         assert(buffers_.find(p) != buffers_.end());
         buffers_.erase(buffers_.find(p));
-    }    
+    }
+    /// Perform websocket protocol initialization
+    void InitProtocol(const char*) {}    
 private:
     /// per-session buffer map; maps per-session user data pointer
     /// to buffer array
@@ -55,6 +57,37 @@ private:
 /// Service instances get created when a WebSocket connection is established
 /// and deleted when the connection breaks.
 class Service {
+public:
+    /// Data frame to be sent to client.
+    /// <code>framBegin == bufferEnd</code> signals the end of writing
+    /// operations; <code>frameBegin == bufferBegin</code> signals the
+    /// beginning of writing operations.
+    struct DataFrame {
+        /// Start of buffer
+        const char* bufferBegin = nullptr;
+        /// One element past last element of buffer
+        const char* bufferEnd = nullptr;
+        /// Start of sub-region of buffer to operate on
+        const char* frameBegin = nullptr;
+        /// One element past the end of the sub-region of the buffer to
+        /// operate on
+        const char* frameEnd = nullptr;
+        /// @c true if data is binary, @c false if it is text
+        bool binary = false;
+        /// Default constructor
+        DataFrame() = default;
+        /// Constructor
+        /// @param bb pointer to first element of buffer
+        /// @param be pointer to first element after the end of the buffer
+        /// @param fb pointer to first element of sub-buffer
+        /// @param fe pointer to fitst element after the end of the sub-buffer
+        ///         to send
+        DataFrame(const char* bb, const char* be,
+                  const char* fb, const char* fe,
+                  bool b)
+        : bufferBegin(bb), bufferEnd(be),
+          frameBegin(fe), frameEnd(fe) {}
+ }; 
 public:
     /// Deleted default constructor; object must always be created by a
     /// placement new with the Service(Context*) constructor.
@@ -69,9 +102,7 @@ public:
     /// pre-formatted WebSocketService takes care of the formatting by
     /// performing an additional copy of the data into another buffer.
     virtual bool PreformattedBuffer() const { return false; }
-    /// Data buffer size. In case the buffer is preformatted this value is
-    /// the size of the actual data without the padding.
-    virtual bool BufferSize() const { return buffer_.size(); }
+   
     /// Returns true if data is ready, false otherwise. In this case Data()
     /// returns @c false after each Get() to make sure that data in buffer
     /// is returned only once
@@ -81,18 +112,45 @@ public:
     /// Returns a reference to the data to send; called when libwebsockets needs
     /// to send data to clients;
     /// @param binary @true if data is in binary format, @false if it is text
-    virtual const Buffer& Get(bool& binary) const { 
-        binary = binary_;
-        dataAvailable_ = false;
-        return buffer_;
+    virtual const DataFrame& Get(int requestedChunkLength) const { 
+        if(writeDataFrame_.frameBegin < writeDataFrame_.bufferEnd) {
+            requestedChunkLength = std::min(requestedCunkLength,
+                                           int(writeDataFrame_.bufferEnd - 
+                                               writeDataFrame_.frameEnd));
+            writeDataFrame_.frameEnd = writeDataFrame_.frameBegin
+                                       + requestedChunkLength; 
+        }
+        if(writeDataFrame_.frameBegin == writeDataFrame_.bufferEnd)
+            dataAvailable_ = false;
+        return writeDataFrame_;
     }
     /// Called when libwebsockets receives data from clients
-    virtual void Put(void* p, size_t len) {
+    virtual void Put(void* p, size_t len, bool done) {
         if(p == nullptr || len == 0) return;
-        buffer_.resize(len);
-        copy((const char*) p, (const char*) p + len, buffer_.begin());
-        dataAvailable_ = true;
+        if(prevReadCompleted_) {
+            buffer_.resize(0);
+            prevReadCompleted_ = false;
+        }
+        const size_t prev = buffer_.size();
+        buffer_.resize(buffer_.size() + len;
+        copy((const char*) p, (const char*) p + len,buffer_.begin() + prev);       
+        if(done) {
+            dataAvailable_ = true;
+            prevReadCompleted_ = true;
+        }
     }
+    /// Update write data frame 
+    virtual void UpdateOutBuffer(int writtenBytes) {
+        writeDataFrame.frameBegin += writtenBytes;
+    }
+    /// 
+    virtual int SetSuggestedOutChunkSize(int cs) {
+        suggestedChunkSize_ = cs;
+    }
+    ///
+    virtual int GetSuggestedOutChunkSize() const {
+        return suggestedChunkSize_;
+    } 
     /// Destroy service instance by cleaning up all used resources. Ususally
     /// this is implemented by explicitly invoking the destructor since no
     /// delete is never executed on this instance which is always created
@@ -111,6 +169,12 @@ private:
     bool binary_ = false;
     /// @c true if data ready
     mutable bool dataAvailable_ = false;
+    /// 
+    mutable DataFrame writeDataFrame_;
+    ///
+    bool prevDataCompleted_ = true;
+    ///
+    int suggestedChunkSize_ = 4096;
 };
 
 //------------------------------------------------------------------------------

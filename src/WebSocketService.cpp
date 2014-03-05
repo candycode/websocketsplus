@@ -1,3 +1,4 @@
+//author: Ugo Varetto
 #include "WebSocketService.h"
 
 namespace wsp {

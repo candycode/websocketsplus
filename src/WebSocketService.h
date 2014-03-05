@@ -41,7 +41,6 @@ using Protocols = std::vector< libwebsocket_protocols >;
 //  bool PreformattedBuffer() true if already contains padding
 //  int GetSuggestedOutChunkSize()
 //  void SetSuggestedOutChunkSize(int)
-//  bool DoneWriting()
 //  void UpdateOutBuffer(DataFrame, bytesWritten) 
 
 
