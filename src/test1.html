@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+   <head>
+       <meta charset="utf-8">
+       <script src=
+  "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+       <script type="text/javascript">
+           $(function() {
+               window.WebSocket = window.WebSocket || window.MozWebSocket;
+
+               var websocket = new WebSocket('ws://127.0.0.1:9001',
+                                             'myprotocol-async');
+
+               websocket.onopen = function () {
+                   $('h1').css('color', 'green');
+               };
+
+               websocket.onerror = function (e) {
+                   $('h1').css('color', 'red');
+                   console.log(e.msg);
+               };
+
+               websocket.onmessage = function (e) {
+                   console.log(e.data.length);
+                   $('div').append($('<p>', { text: "message size: " + e.data.length }));
+               };
+               
+
+               $('button').click(function(e) {
+                  try {
+                   e.preventDefault();
+                   var buffer = new Array();
+                   //warning: Chrome 33.0.1750.117 has a websocket output size
+                   //limit of 64kb
+                   var m = parseInt($('input').val());
+                   if(m < 0) m = 1;
+                   for(var i = 0; i < m; i++) buffer[i] = 1;
+                   //websocket.send();
+                   websocket.send(buffer.join(""));
+                   $('input').val('');
+                 } catch(e) {
+                    console.log(e);
+                 }
+               });
+           });
+       </script>
+       </head>
+   <body>
+       <h1>WebSockets test</h1>
+       <form>
+           <p>Enter message size:</p>
+           <input type="text" />
+           <button>Send</button>
+       </form>
+       <div></div>
+   </body>
+</html>
+

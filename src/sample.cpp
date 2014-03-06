@@ -120,8 +120,7 @@ public:
             writeDataFrame_.frameEnd = writeDataFrame_.frameBegin
                                        + requestedChunkLength; 
         }
-        if(writeDataFrame_.frameBegin == writeDataFrame_.bufferEnd)
-            dataAvailable_ = false;
+        else dataAvailable_ = false;
         return writeDataFrame_;
     }
     /// Called when libwebsockets receives data from clients
@@ -135,6 +134,7 @@ public:
         }
         const size_t prev = buffer_.size();
         buffer_.resize(buffer_.size() + len);
+        UpdateWriteDataFrame();
         copy((const char*) p, (const char*) p + len, buffer_.begin() + prev);       
         if(done) {
             prevReadCompleted_ = true;
@@ -160,6 +160,12 @@ public:
         this->~Service();
     }
 private:
+    void UpdateWriteDataFrame() {
+        writeDataFrame_.bufferBegin = &buffer_[0];
+        writeDataFrame_.bufferEnd   = &buffer_[0] + buffer_.size();
+        writeDataFrame_.frameBegin  = writeDataFrame_.bufferBegin;
+        writeDataFrame_.frameEnd    = writeDataFrame_.frameBegin;
+    }
     /// virtual destructor, never called through delete since instances of
     /// this class are always created through a placement new call
     virtual ~Service() {}    
@@ -184,12 +190,13 @@ int main(int, char**) {
     using namespace wsp;
     using WSS = WebSocketService;
     WSS ws;
-    WSS::ResetLogLevels(); // clear all loggers
-    //create and set logger for 'INFO' logs
-    auto log = [](int level, const char* msg) {
-        std::cout << WSS::Level(level) << "> " << msg << std::endl;
-    };
-    WSS::SetLogger("INFO", log);
+    // WSS::ResetLogLevels(); // clear all loggers
+    // //create and set logger for 'INFO' logs
+    // auto log = [](int level, const char* msg) {
+    //     std::cout << WSS::Level(level) << "> " << msg << std::endl;
+    // };
+    // WSS::SetLogger("INFO", log);
+    // WSS::SetLogger("NOTICE", log);
     //init service
     ws.Init(9001, //port
             nullptr, //SSL certificate path
@@ -216,8 +223,8 @@ int main(int, char**) {
 // myprotocol-async' for async processing.
 // When testing with async processing also try to have Service::Data() always
 // return true or return true a fixed number of time after each Put
-//<!DOCTYPE html>
-//<html>
+// <!DOCTYPE html>
+// <html>
 //    <head>
 //        <meta charset="utf-8">
 //        <script src=
@@ -225,24 +232,24 @@ int main(int, char**) {
 //        <script type="text/javascript">
 //            $(function() {
 //                window.WebSocket = window.WebSocket || window.MozWebSocket;
-// 
+
 //                var websocket = new WebSocket('ws://127.0.0.1:9000',
 //                                              'myprotocol-async');
-// 
+
 //                websocket.onopen = function () {
 //                    $('h1').css('color', 'green');
 //                };
-// 
+
 //                websocket.onerror = function () {
 //                    $('h1').css('color', 'red');
 //                };
-// 
+
 //                websocket.onmessage = function (message) {
 //                    console.log(message.data);
 //                    $('div').append($('<p>', { text: message.data }));
 //                };
-//                
-// 
+               
+
 //                $('button').click(function(e) {
 //                    e.preventDefault();
 //                    websocket.send($('input').val());
@@ -259,5 +266,5 @@ int main(int, char**) {
 //        </form>
 //        <div></div>
 //    </body>
-//</html>
-//
+// </html>
+

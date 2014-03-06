@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <libwebsockets.h>
 
+#include <iostream>
 namespace wsp {
 
 using Protocols = std::vector< libwebsocket_protocols >;
@@ -79,11 +80,6 @@ public:
     ///                until no more data is available
     /// - SEND_PACKET: a single packet of data is sent at each write
     enum SendMode {SEND_GREEDY, SEND_PACKET};
-    ///Receive mode:
-    /// -RECV_GREEDY: data is received in a loop and forwarded to service
-    ///               unitl no more adta is available
-    /// -RECV_PACKET: a single receive is executed
-    enum RecvMode {RECV_GREEDY, RECV_PACKET};
     ///Service information
     /// @tparam S service type
     /// @tparam T processing type:
@@ -91,8 +87,7 @@ public:
     /// - ASYNC_REP for asynchronous
     template < typename S,
                Type T,
-               SendMode SM = SEND_PACKET,
-               RecvMode RM = RECV_PACKET >
+               SendMode SM = SEND_PACKET >
     struct Entry {
         ///Service type
         using ServiceType = S;
@@ -107,11 +102,6 @@ public:
         /// - SEND_ASYNC:  send content one packet at a time, yielding control
         ///                back after each send
         const static SendMode sendMode = SM;
-        ///Receive processomg mode:
-        /// - RECV_GREEDY: receive all the content in a loop
-        /// - RECV_ASYNC:  receive content one packet at a time, yielding
-        ///                control back after each receive 
-        const static RecvMode recvMode = RM;
         ///Constructor
         /// @param n protocol name
         Entry(const std::string& n, int rx = 0) : name(n), rxBufSize(rx) {}
@@ -249,13 +239,12 @@ private:
         libwebsocket_protocols p;
         p.name = new char[entry.name.size() + 1];
         p.rx_buffer_size = entry.rxBufSize;
-        p.no_buffer_all_partial_tx = 1; //handle partial send
+        p.no_buffer_all_partial_tx = 1;//1; //handle partial send
         std::strcpy((char*) p.name, entry.name.c_str());
         p.callback = &WebSocketService::WSCallback< ContextT,
                                   typename ArgT::ServiceType,
                                   ArgT::type,
-                                  ArgT::sendMode,
-                                  ArgT::recvMode >;
+                                  ArgT::sendMode >;
         p.per_session_data_size = sizeof(typename ArgT::ServiceType);
         protocolHandlers_.push_back(p);
         AddHandlers< ContextT >(entries...);
@@ -276,8 +265,7 @@ private:
     /// @param in input buffer
     /// @param len length of input buffer
     /// @return true if all packets sent, false otherwise
-    template < typename ContextT, typename T, Type t,
-               SendMode sm, RecvMode rm >
+    template < typename ContextT, typename T, Type t, SendMode sm >
     static int WSCallback(libwebsocket_context *context,
                libwebsocket *wsi,
                libwebsocket_callback_reasons reason,
@@ -300,7 +288,7 @@ private:
         while(!done) {
             const DF df = s->Get(chunkSize);    
             const size_t bsize = df.frameEnd - df.frameBegin;
-            done = df.frameBegin == df.bufferEnd;
+            done = df.frameEnd == df.bufferEnd;
             const bool begin = df.frameBegin == df.bufferBegin;
             const size_t bytesToWrite = s->PreformattedBuffer() 
                              ? LWS_SEND_BUFFER_PRE_PADDING + bsize +
@@ -325,7 +313,7 @@ private:
                               LWS_SEND_BUFFER_POST_PADDING);
                 std::copy(df.frameBegin, df.frameEnd, buffer.begin()
                                                 + LWS_SEND_BUFFER_PRE_PADDING);
-
+                
                 bytesWritten = libwebsocket_write(
                           wsi, 
                           (unsigned char*) &buffer[LWS_SEND_BUFFER_PRE_PADDING],
@@ -334,7 +322,7 @@ private:
             }
             if(bytesWritten < 0) 
                 throw std::runtime_error("Send error");
-            else if(bytesWritten < bytesToWrite) {
+            else {
                 s->UpdateOutBuffer(bytesWritten);
                 s->SetSuggestedOutChunkSize(bytesWritten);
             }
@@ -379,7 +367,7 @@ private:
 
 //------------------------------------------------------------------------------
 template < typename C, typename S, WebSocketService::Type type,
-           WebSocketService::SendMode sm, WebSocketService::RecvMode rm >
+           WebSocketService::SendMode sm >
 int WebSocketService::WSCallback(
                libwebsocket_context *context,
                libwebsocket *wsi,
@@ -405,14 +393,10 @@ int WebSocketService::WSCallback(
             if(p) c->InitProtocol(p->name);
         }
         break;
-        case LWS_CALLBACK_RECEIVE: { //libwebsockets_remaining_packet_payload
+        case LWS_CALLBACK_RECEIVE: { 
             S* s = reinterpret_cast< S* >(user);
-            bool done = false;
-            while(!done) {
-                done = libwebsockets_remaining_packet_payload(wsi) == 0;
-                s->Put(in, len, done);
-                if(rm != RecvMode::RECV_GREEDY) break;
-            }
+            const bool done = libwebsockets_remaining_packet_payload(wsi) == 0;
+            s->Put(in, len, done);
             if(type == Type::REQ_REP && done) {
                 const bool GREEDY_OPTION = sm == SendMode::SEND_GREEDY;
                 C* c = 
