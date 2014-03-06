@@ -91,8 +91,8 @@ public:
     /// - ASYNC_REP for asynchronous
     template < typename S,
                Type T,
-               SendMode SM = SEND_ASYNC,
-               RecvMode RM = RECV_ASYNC >
+               SendMode SM = SEND_PACKET,
+               RecvMode RM = RECV_PACKET >
     struct Entry {
         ///Service type
         using ServiceType = S;
@@ -244,7 +244,7 @@ private:
     ///Create a new protocol->service mapping
     template < typename ContextT, typename ArgT, typename...ArgsT >
     void AddHandlers(const ArgT& entry, const ArgsT&...entries) {
-        if(p.name == std::string("http-only")) 
+        if(entry.name == std::string("http-only")) 
             throw std::runtime_error("HTTP protocol not supported");
         libwebsocket_protocols p;
         p.name = new char[entry.name.size() + 1];
@@ -291,7 +291,7 @@ private:
                      bool greedy) {
         S* s = reinterpret_cast< S* >(user);
         assert(s);
-        if(!s->Data()) return;
+        if(!s->Data()) return true;
         C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
         assert(c);
         using DF = typename S::DataFrame;  
@@ -308,15 +308,16 @@ private:
                              : bsize;
             if(bytesToWrite < 1) return true;                      
             int writeMode = df.binary == true ? LWS_WRITE_BINARY 
-                                              : LWS_WRITE_TEXT; 
+                                              : LWS_WRITE_TEXT;
+            int bytesWritten = 0;                                   
             if(!begin) writeMode = LWS_WRITE_CONTINUATION;
             if(!done) writeMode |= LWS_WRITE_NO_FIN;                
             if(s->PreformattedBuffer()) {
                 bytesWritten = libwebsocket_write(
                                wsi, 
-                               (unsigned char*) &b[LWS_SEND_BUFFER_PRE_PADDING],
+                               (unsigned char*) df.frameBegin,
                                bytesToWrite, // <= padding + chunkSize
-                               writeMode);
+                               libwebsocket_write_protocol(writeMode));
                                 
             } else {
                 std::vector< char >& buffer = c->GetBuffer(user, 0);
@@ -329,12 +330,12 @@ private:
                           wsi, 
                           (unsigned char*) &buffer[LWS_SEND_BUFFER_PRE_PADDING],
                           bytesToWrite, //<= chunkSize
-                          writeMode);
+                          libwebsocket_write_protocol(writeMode));
             }
             if(bytesWritten < 0) 
                 throw std::runtime_error("Send error");
             else if(bytesWritten < bytesToWrite) {
-                s->UpdateOutBuffer(df, bytesWritten);
+                s->UpdateOutBuffer(bytesWritten);
                 s->SetSuggestedOutChunkSize(bytesWritten);
             }
             if(!greedy) break;
@@ -378,7 +379,7 @@ private:
 
 //------------------------------------------------------------------------------
 template < typename C, typename S, WebSocketService::Type type,
-           SendMode sm, RecvMode rm >
+           WebSocketService::SendMode sm, WebSocketService::RecvMode rm >
 int WebSocketService::WSCallback(
                libwebsocket_context *context,
                libwebsocket *wsi,
@@ -396,20 +397,21 @@ int WebSocketService::WSCallback(
             }
         }
         break;
-        case LWS_CALLBACK_PROTOCOL_INIT:
+        case LWS_CALLBACK_PROTOCOL_INIT: {
             //One time protocol initialiation 
             C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
-            c->InitProtocol(libwebsocket_get_protocol(wsi));
-            break;
+            c->InitProtocol(libwebsockets_get_protocol(wsi)->name);
+        }
+        break;
         case LWS_CALLBACK_RECEIVE: { //libwebsockets_remaining_packet_payload
             S* s = reinterpret_cast< S* >(user);
             bool done = false;
             while(!done) {
                 done = libwebsockets_remaining_packet_payload(wsi) == 0;
                 s->Put(in, len, done);
-                if(sm != RecvMode::RECV_GREEDY) break;
+                if(rm != RecvMode::RECV_GREEDY) break;
             }
-            if((type == Type::REQ_REP && done) {
+            if(type == Type::REQ_REP && done) {
                 const bool GREEDY_OPTION = sm == SendMode::SEND_GREEDY;
                 C* c = 
                   reinterpret_cast< C* >(libwebsocket_context_user(context));

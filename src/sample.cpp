@@ -114,7 +114,7 @@ public:
     /// @param binary @true if data is in binary format, @false if it is text
     virtual const DataFrame& Get(int requestedChunkLength) const { 
         if(writeDataFrame_.frameBegin < writeDataFrame_.bufferEnd) {
-            requestedChunkLength = std::min(requestedCunkLength,
+            requestedChunkLength = std::min(requestedChunkLength,
                                            int(writeDataFrame_.bufferEnd - 
                                                writeDataFrame_.frameEnd));
             writeDataFrame_.frameEnd = writeDataFrame_.frameBegin
@@ -132,7 +132,7 @@ public:
             prevReadCompleted_ = false;
         }
         const size_t prev = buffer_.size();
-        buffer_.resize(buffer_.size() + len;
+        buffer_.resize(buffer_.size() + len);
         copy((const char*) p, (const char*) p + len,buffer_.begin() + prev);       
         if(done) {
             dataAvailable_ = true;
@@ -141,7 +141,7 @@ public:
     }
     /// Update write data frame 
     virtual void UpdateOutBuffer(int writtenBytes) {
-        writeDataFrame.frameBegin += writtenBytes;
+        writeDataFrame_.frameBegin += writtenBytes;
     }
     /// 
     virtual int SetSuggestedOutChunkSize(int cs) {
@@ -172,7 +172,7 @@ private:
     /// 
     mutable DataFrame writeDataFrame_;
     ///
-    bool prevDataCompleted_ = true;
+    bool prevReadCompleted_ = true;
     ///
     int suggestedChunkSize_ = 4096;
 };
