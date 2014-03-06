@@ -55,11 +55,11 @@ private:
 /// Per-session (between a socket open and close) service instance, this is
 /// the class that handles incoming requests and sends back replies.
 /// Service instances get created when a WebSocket connection is established
-/// and deleted when the connection breaks.
+/// and deleted when the connection terminates.
 class Service {
 public:
     /// Data frame to be sent to client.
-    /// <code>framBegin == bufferEnd</code> signals the end of writing
+    /// <code>frameBegin == bufferEnd</code> signals the end of writing
     /// operations; <code>frameBegin == bufferBegin</code> signals the
     /// beginning of writing operations.
     struct DataFrame {
@@ -116,7 +116,7 @@ public:
         if(writeDataFrame_.frameBegin < writeDataFrame_.bufferEnd) {
             requestedChunkLength = std::min(requestedChunkLength,
                                            int(writeDataFrame_.bufferEnd - 
-                                               writeDataFrame_.frameEnd));
+                                               writeDataFrame_.frameBegin));
             writeDataFrame_.frameEnd = writeDataFrame_.frameBegin
                                        + requestedChunkLength; 
         }
