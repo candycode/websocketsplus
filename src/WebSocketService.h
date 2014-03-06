@@ -358,7 +358,7 @@ private:
     ///libwebosckets' creation info data    
     lws_context_creation_info info_;
     ///libwebsockets context
-    libwebsocket_context* context_;
+    libwebsocket_context* context_ = nullptr;
     ///Array of protocol->service mappings
     Protocols protocolHandlers_;
     ///SSL certificate path
@@ -400,7 +400,9 @@ int WebSocketService::WSCallback(
         case LWS_CALLBACK_PROTOCOL_INIT: {
             //One time protocol initialiation 
             C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
-            c->InitProtocol(libwebsockets_get_protocol(wsi)->name);
+            if(!wsi) break;
+            const libwebsocket_protocols* p =  libwebsockets_get_protocol(wsi);
+            if(p) c->InitProtocol(p->name);
         }
         break;
         case LWS_CALLBACK_RECEIVE: { //libwebsockets_remaining_packet_payload

@@ -105,7 +105,7 @@ public:
    
     /// Returns true if data is ready, false otherwise. In this case Data()
     /// returns @c false after each Get() to make sure that data in buffer
-    /// is returned only once
+    /// is returned only once:
     virtual bool Data() const {
         return dataAvailable_;
     }
@@ -126,6 +126,8 @@ public:
     }
     /// Called when libwebsockets receives data from clients
     virtual void Put(void* p, size_t len, bool done) {
+        dataAvailable_ = done; //signal that data is available as soon as all
+                               //data packets are received
         if(p == nullptr || len == 0) return;
         if(prevReadCompleted_) {
             buffer_.resize(0);
@@ -133,9 +135,8 @@ public:
         }
         const size_t prev = buffer_.size();
         buffer_.resize(buffer_.size() + len);
-        copy((const char*) p, (const char*) p + len,buffer_.begin() + prev);       
+        copy((const char*) p, (const char*) p + len, buffer_.begin() + prev);       
         if(done) {
-            dataAvailable_ = true;
             prevReadCompleted_ = true;
         }
     }
@@ -190,7 +191,7 @@ int main(int, char**) {
     };
     WSS::SetLogger("INFO", log);
     //init service
-    ws.Init(9000, //port
+    ws.Init(9001, //port
             nullptr, //SSL certificate path
             nullptr, //SSL key path
             Context(), //context instance, will be copied internally
