@@ -190,13 +190,12 @@ int main(int, char**) {
     using namespace wsp;
     using WSS = WebSocketService;
     WSS ws;
-    // WSS::ResetLogLevels(); // clear all loggers
-    // //create and set logger for 'INFO' logs
-    // auto log = [](int level, const char* msg) {
-    //     std::cout << WSS::Level(level) << "> " << msg << std::endl;
-    // };
-    // WSS::SetLogger("INFO", log);
-    // WSS::SetLogger("NOTICE", log);
+    WSS::ResetLogLevels(); // clear all loggers
+    //create and set logger for 'INFO' logs
+    auto log = [](int level, const char* msg) {
+        std::cout << WSS::Level(level) << "> " << msg << std::endl;
+    };
+    WSS::SetLogger(log);
     //init service
     ws.Init(9001, //port
             nullptr, //SSL certificate path

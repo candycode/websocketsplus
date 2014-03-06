@@ -3,8 +3,8 @@
 
 namespace wsp {
 
-std::map< lws_log_levels, std::function< void (int, const char*) > >  
-                            WebSocketService::loggers_;
+
+std::function< void (int, const char*) > WebSocketService::logger_;    
 const std::map< lws_log_levels, std::string > WebSocketService::levels_ = 
                                                     {{LLL_ERR,    "ERROR"},
                                                      {LLL_WARN,   "WARNING"},

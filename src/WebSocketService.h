@@ -184,27 +184,26 @@ public:
     /// --disable-debug that gets rid of the overhead of checking while keeping
     /// _warn and _err active
     
-    /// Set log handler for specific log levels
-    /// @tparam F logger type
-    /// @param log level name, maps to libwebsockets levels:
-    /// - "ERR"
-    /// - "WARN"
-    /// - "NOTICE"
-    /// - "INFO"
-    /// - "DEBUG"
-    /// - "PARSER"
-    /// - "HEADER"
-    /// - "EXTENSION"
-    /// - "CLIENT"
-    /// - "LATENCY"
-    /// @param f logger
+    /// Set log handler
     template < typename F >
-    static void SetLogger(const std::string& l, F&& f) {
-        if(levelNames_.find(l) == levelNames_.end())
-            throw std::logic_error("Invalid log level '" + l + "'");
-        loggers_[levelNames_.find(l)->second] = f;
-        lws_set_log_level(levelNames_.find(l)->second, &LogLevel);
+    static void SetLogger(F&& f) {
+        logger_ = f;
+        lws_set_log_level(LLL_ERR 
+                          | LLL_WARN
+                          | LLL_NOTICE
+                          | LLL_INFO
+                          | LLL_DEBUG, &LogFunction);
+        // lws_set_log_level(LLL_WARN, &LogFunction);
+        // lws_set_log_level(LLL_NOTICE, &LogFunction);
+        // lws_set_log_level(LLL_INFO, &LogFunction);
+        // lws_set_log_level(LLL_DEBUG, &LogFunction);
+        // lws_set_log_level(LLL_PARSER, &LogFunction);
+        // lws_set_log_level(LLL_HEADER, &LogFunction);
+        // lws_set_log_level(LLL_EXT, &LogFunction);
+        // lws_set_log_level(LLL_CLIENT, &LogFunction);
+        // lws_set_log_level(LLL_LATENCY, &LogFunction);
     }
+
     ///Clear all log levels: no logging happens after a call to this method.
     ///If this method is not called then the default libwebsockets logging takes
     ///place
@@ -228,8 +227,8 @@ public:
     }
 private:
     ///Callback function passed to libwebsockets to receive log info
-    static void LogLevel(int level, const char* msg) {
-        loggers_[lws_log_levels(level)](level, msg);
+    static void LogFunction(int level, const char* msg) {
+        logger_(level, msg);
     }
     ///Create a new protocol->service mapping
     template < typename ContextT, typename ArgT, typename...ArgsT >
@@ -356,9 +355,8 @@ private:
     ///User data deleter, used to delete the copy of the context stored into
     ///libwebsockets' context
     std::unique_ptr< UserDataDeleter > userDataDeleter_;
-    ///libwebsockets log levels -> logger map
-    static std::map< lws_log_levels, std::function< void (int, const char*) > >
-        loggers_;
+    ///libwebsockets log levels -> logger
+    static std::function< void (int, const char*) > logger_;
     ///libwebsockets' log levels -> text map
     const static std::map< lws_log_levels, std::string > levels_;
     ///log level name -> libwebsockets' log level map
