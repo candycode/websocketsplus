@@ -5,7 +5,23 @@
        <script src=
   "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
        <script type="text/javascript">
+           var start, end;
+
+           function validData(d) {
+               return true;
+           }
+           function formatSize(sz) {
+               if(sz < 1) return "-";
+               if(sz < 1024) {
+                return sz + " bytes";
+               } else if(sz >= 1024 && sz < 1024*1024) {
+                  return (sz / 1024).toFixed(2) + " kB";
+               } else if(sz >= 1024 * 1024) {
+                  return (sz / (1024 * 1024)).toFixed(2) + " MB";
+               }
+           }
            $(function() {
+
                window.WebSocket = window.WebSocket || window.MozWebSocket;
 
                var websocket = new WebSocket('ws://127.0.0.1:9001',
@@ -21,8 +37,21 @@
                };
 
                websocket.onmessage = function (e) {
+                   end = performance.now();
                    console.log(e.data.length);
-                   $('div').append($('<p>', { text: "message size: " + e.data.length }));
+                   var msg = "Round-trip time: " 
+                             + (end - start).toFixed(0)
+                             + " ms";
+                   msg += "<br/>";          
+                   msg += "Received size: " + formatSize(e.data.length)
+                   if(e.data.length >= 1024) 
+                       msg += " (" + e.data.length + " bytes)" ;
+
+                   $('div').css('font-family', 'Courier New');
+                   if(validData(e.data)) $('div').css('color', 'blue');
+                   else $('div').css('color', 'red');
+                   $('div').append($('<p>', { html:  msg }));
+
                };
                
 
@@ -34,8 +63,9 @@
                    //limit of 64kb
                    var m = parseInt($('input').val());
                    if(m < 0) m = 1;
-                   for(var i = 0; i < m; i++) buffer[i] = 1;
+                   for(var i = 0; i < m; i++) buffer[i] = 3;
                    //websocket.send();
+                   start = performance.now(); 
                    websocket.send(buffer.join(""));
                    $('input').val('');
                  } catch(e) {

@@ -192,7 +192,12 @@ public:
                           | LLL_WARN
                           | LLL_NOTICE
                           | LLL_INFO
-                          | LLL_DEBUG, &LogFunction);
+                          | LLL_DEBUG
+                          | LLL_PARSER
+                          | LLL_HEADER
+                          | LLL_EXT
+                          | LLL_CLIENT
+                          | LLL_LATENCY, &LogFunction);
         // lws_set_log_level(LLL_WARN, &LogFunction);
         // lws_set_log_level(LLL_NOTICE, &LogFunction);
         // lws_set_log_level(LLL_INFO, &LogFunction);
@@ -203,7 +208,11 @@ public:
         // lws_set_log_level(LLL_CLIENT, &LogFunction);
         // lws_set_log_level(LLL_LATENCY, &LogFunction);
     }
-
+    template < typename F, typename... S >
+    static void SetLogger(F&& f, const S&...ll) {
+        logger_ = f;
+        lws_set_log_level(ComposeLogLevels(lws_log_levels(0),ll...), &LogFunction);
+    }
     ///Clear all log levels: no logging happens after a call to this method.
     ///If this method is not called then the default libwebsockets logging takes
     ///place
@@ -226,6 +235,26 @@ public:
         else return levels_.find(lws_log_levels(ll))->second;
     }
 private:
+    ///
+    template < typename T, typename... S >
+    static lws_log_levels ComposeLogLevels(lws_log_levels prev,
+                                    const T& l, const S&... rest) {
+        if(levelNames_.find(l) == levelNames_.end()) {
+            throw std::logic_error(
+                (std::string("Invalid log level name: ") + l).c_str());
+        }
+        prev = lws_log_levels(int(prev) | int(levelNames_.find(l)->second));
+        return ComposeLogLevels(prev, rest...);
+    }
+    template < typename S >
+    static lws_log_levels ComposeLogLevels(lws_log_levels prev, const S& l) {
+        if(levelNames_.find(l) == levelNames_.end()) {
+            throw std::logic_error(
+                (std::string("Invalid log level name: ") + l).c_str());
+        }
+        prev = lws_log_levels(int(prev) | int(levelNames_.find(l)->second));
+        return prev;
+    }
     ///Callback function passed to libwebsockets to receive log info
     static void LogFunction(int level, const char* msg) {
         logger_(level, msg);

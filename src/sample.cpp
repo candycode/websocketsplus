@@ -145,7 +145,7 @@ public:
         writeDataFrame_.frameBegin += writtenBytes;
     }
     /// 
-    virtual int SetSuggestedOutChunkSize(int cs) {
+    virtual void SetSuggestedOutChunkSize(int cs) {
         suggestedChunkSize_ = cs;
     }
     ///
@@ -195,7 +195,7 @@ int main(int, char**) {
     auto log = [](int level, const char* msg) {
         std::cout << WSS::Level(level) << "> " << msg << std::endl;
     };
-    WSS::SetLogger(log);
+    WSS::SetLogger(log, "NOTICE", "WARNING");
     //init service
     ws.Init(9001, //port
             nullptr, //SSL certificate path
@@ -204,9 +204,9 @@ int main(int, char**) {
             //protocol->service mapping
             //sync request-reply: at each request a reply is immediately sent
             //to the client
-            WSS::Entry< Service, WSS::REQ_REP >("myprotocol"),
+         //   WSS::Entry< Service, WSS::REQ_REP >("myprotocol"),
             //async: requests and replies are handled asynchronously
-            WSS::Entry< Service, WSS::ASYNC_REP >("myprotocol-async")
+            WSS::Entry< Service, WSS::ASYNC_REP >("myprotocol-async")//, 16384)
     );
     //start event loop: one iteration every >= 50ms
     ws.StartLoop(50, //ms
