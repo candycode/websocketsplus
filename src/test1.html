@@ -6,8 +6,9 @@
   "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
        <script type="text/javascript">
            var start, end;
-
+           var ELEMENT_VALUE = '3'; 
            function validData(d) {
+               //for(var i in d) if(d[i] !== ELEMENT_VALUE) return false;
                return true;
            }
            function formatSize(sz) {
@@ -35,10 +36,9 @@
                    $('h1').css('color', 'red');
                    console.log(e.msg);
                };
-
                websocket.onmessage = function (e) {
                    end = performance.now();
-                   console.log(e.data.length);
+                   //console.log(e.data);
                    var msg = "Round-trip time: " 
                              + (end - start).toFixed(0)
                              + " ms";
@@ -53,17 +53,16 @@
                    $('div').append($('<p>', { html:  msg }));
 
                };
-               
-
                $('button').click(function(e) {
                   try {
                    e.preventDefault();
                    var buffer = new Array();
                    //warning: Chrome 33.0.1750.117 has a websocket output size
                    //limit of 64kb
+                   if($('input').val().length == 0) return;  
                    var m = parseInt($('input').val());
-                   if(m < 0) m = 1;
-                   for(var i = 0; i < m; i++) buffer[i] = 3;
+                   if(m < 1) alert("Size must be > 0");
+                   for(var i = 0; i < m; i++) buffer[i] = ELEMENT_VALUE;
                    //websocket.send();
                    start = performance.now(); 
                    websocket.send(buffer.join(""));

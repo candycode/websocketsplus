@@ -35,3 +35,5 @@ Send: service->Get(len) returns a struct {
       size *must be* always <= len
       if size is < len then output buffer is padded by invoking 
       service->PadOutput(outPtr, len - size) 
+
+

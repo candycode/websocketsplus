@@ -146,11 +146,11 @@ public:
     }
     /// 
     virtual void SetSuggestedOutChunkSize(int cs) {
-        suggestedChunkSize_ = cs;
+        suggestedWriteChunkSize_ = cs;
     }
     ///
     virtual int GetSuggestedOutChunkSize() const {
-        return suggestedChunkSize_;
+        return suggestedWriteChunkSize_;
     } 
     /// Destroy service instance by cleaning up all used resources. Ususally
     /// this is implemented by explicitly invoking the destructor since no
@@ -176,12 +176,15 @@ private:
     bool binary_ = false;
     /// @c true if data ready
     mutable bool dataAvailable_ = false;
-    /// 
+    /// Data frame returned by @c Get method holding information such as
+    /// boundaries of buffer to send as a frame
     mutable DataFrame writeDataFrame_;
-    ///
+    /// @c true if previous read completed, @c false otherwise. This data member
+    /// is updated by the @c Put method when libwesockets has finished reading
+    /// data
     bool prevReadCompleted_ = true;
-    ///
-    int suggestedChunkSize_ = 4096;
+    /// Suggested write chunk size; will be updated in case it is too big.
+    int suggestedWriteChunkSize_ = 4096;
 };
 
 //------------------------------------------------------------------------------
@@ -195,7 +198,7 @@ int main(int, char**) {
     auto log = [](int level, const char* msg) {
         std::cout << WSS::Level(level) << "> " << msg << std::endl;
     };
-    WSS::SetLogger(log, "NOTICE", "WARNING");
+    WSS::SetLogger(log, "NOTICE", "WARNING", "ERROR");
     //init service
     ws.Init(9001, //port
             nullptr, //SSL certificate path
@@ -209,7 +212,7 @@ int main(int, char**) {
             WSS::Entry< Service, WSS::ASYNC_REP >("myprotocol-async")//, 16384)
     );
     //start event loop: one iteration every >= 50ms
-    ws.StartLoop(50, //ms
+    ws.StartLoop(1, //ms
                  []{return true;} //termination condition (exit on false)
                                   //checked at each iteration, loops forever
                                   //in this case

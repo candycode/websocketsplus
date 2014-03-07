@@ -184,7 +184,7 @@ public:
     /// --disable-debug that gets rid of the overhead of checking while keeping
     /// _warn and _err active
     
-    /// Set log handler
+    /// Set log handler for all levels
     template < typename F >
     static void SetLogger(F&& f) {
         logger_ = f;
@@ -208,6 +208,10 @@ public:
         // lws_set_log_level(LLL_CLIENT, &LogFunction);
         // lws_set_log_level(LLL_LATENCY, &LogFunction);
     }
+    /// Set log handlers for scpecific log levels only.
+    /// @tparam F callable object type to invoke
+    /// @tparam S string type
+    /// 
     template < typename F, typename... S >
     static void SetLogger(F&& f, const S&...ll) {
         logger_ = f;
