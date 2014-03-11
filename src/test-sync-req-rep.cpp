@@ -1,3 +1,4 @@
+#if 0
 //author: Ugo Varetto
 //Test driver for WebSocketService and reference implementation of Context 
 //and Service interfaces
@@ -269,4 +270,4 @@ int main(int, char**) {
 //        <div></div>
 //    </body>
 // </html>
-
+#endif

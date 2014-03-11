@@ -26,7 +26,7 @@
                window.WebSocket = window.WebSocket || window.MozWebSocket;
 
                var websocket = new WebSocket('ws://127.0.0.1:9001',
-                                             'myprotocol-async');
+                                             'myprotocol');
 
                websocket.onopen = function () {
                    $('h1').css('color', 'green');

@@ -215,7 +215,8 @@ public:
     template < typename F, typename... S >
     static void SetLogger(F&& f, const S&...ll) {
         logger_ = f;
-        lws_set_log_level(ComposeLogLevels(lws_log_levels(0),ll...), &LogFunction);
+        lws_set_log_level(ComposeLogLevels(lws_log_levels(0),ll...),
+                          &LogFunction);
     }
     ///Clear all log levels: no logging happens after a call to this method.
     ///If this method is not called then the default libwebsockets logging takes
@@ -352,11 +353,11 @@ private:
                           bytesToWrite, //<= chunkSize
                           libwebsocket_write_protocol(writeMode));
             }
+            //std::cout << bytesWritten << std::endl;
             if(bytesWritten < 0) 
                 throw std::runtime_error("Send error");
             else {
                 s->UpdateOutBuffer(bytesWritten);
-                s->SetSuggestedOutChunkSize(bytesWritten);
             }
             if(!greedy) break;
         }
@@ -446,7 +447,7 @@ int WebSocketService::WSCallback(
             const bool allSent = Send< C, S >(context, wsi, user,
                                               GREEDY_OPTION);
 
-            if((type == Type::ASYNC_REP && !allSent)
+            if( !allSent
                 || type == Type::STREAM
                 || type == Type::PUB_SUB) {    
             

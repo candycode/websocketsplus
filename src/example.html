@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+   <head>
+       <meta charset="utf-8">
+       <script src=
+  "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+       <script type="text/javascript">
+           var start, end;
+           var ELEMENT_VALUE = '3'; 
+           function validData(d) {
+               //for(var i in d) if(d[i] !== ELEMENT_VALUE) return false;
+               return true;
+           }
+           function formatSize(sz) {
+               if(sz < 1) return "-";
+               if(sz < 1024) {
+                return sz + " bytes";
+               } else if(sz >= 1024 && sz < 1024*1024) {
+                  return (sz / 1024).toFixed(2) + " kB";
+               } else if(sz >= 1024 * 1024) {
+                  return (sz / (1024 * 1024)).toFixed(2) + " MB";
+               }
+           }
+           $(function() {
+
+               window.WebSocket = window.WebSocket || window.MozWebSocket;
+
+               var websocket = new WebSocket('ws://127.0.0.1:9001',
+                                             'myprotocol-greedy');
+
+               websocket.onopen = function () {
+                   $('h1').css('color', 'green');
+               };
+
+               websocket.onerror = function (e) {
+                   $('h1').css('color', 'red');
+                   console.log(e.msg);
+               };
+               websocket.onmessage = function (e) {
+                   end = performance.now();
+                   //console.log(e.data);
+                   var msg = "Round-trip time: " 
+                             + (end - start).toFixed(0)
+                             + " ms";
+                   msg += "<br/>";          
+                   msg += "Received size: " + formatSize(e.data.length)
+                   if(e.data.length >= 1024) 
+                       msg += " (" + e.data.length + " bytes)" ;
+
+                   $('div').css('font-family', 'Courier New');
+                   if(validData(e.data)) $('div').css('color', 'blue');
+                   else $('div').css('color', 'red');
+                   $('div').append($('<p>', { html:  msg }));
+
+               };
+               $('button').click(function(e) {
+                  try {
+                   e.preventDefault();
+                   var buffer = new Array();
+                   //warning: Chrome 33.0.1750.117 has a websocket output size
+                   //limit of 64kb
+                   if($('input').val().length == 0) return;  
+                   var m = parseInt($('input').val());
+                   if(m < 1) alert("Size must be > 0");
+                   for(var i = 0; i < m; i++) buffer[i] = ELEMENT_VALUE;
+                   //websocket.send();
+                   start = performance.now(); 
+                   websocket.send(buffer.join(""));
+                   $('input').val('');
+                 } catch(e) {
+                    console.log(e);
+                 }
+               });
+           });
+       </script>
+       </head>
+   <body>
+       <h1>WebSockets test</h1>
+       <form>
+           <p>Enter message size:</p>
+           <input type="text" />
+           <button>Send</button>
+       </form>
+       <div></div>
+   </body>
+</html>
+
