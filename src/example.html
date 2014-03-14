@@ -23,6 +23,8 @@
            }
            $(function() {
 
+               var binary = false;   
+
                window.WebSocket = window.WebSocket || window.MozWebSocket;
 
                var websocket = new WebSocket('ws://127.0.0.1:9001',
@@ -39,19 +41,15 @@
                    console.log(e.msg);
                };
                websocket.onmessage = function (e) {
-                   for(key in e.data)
-                      //if(e.hasOwnProperty(key))
-                        console.log(key + ": " + e[key]);
-                   console.log(e.data.size);     
+                   var length = binary ? e.data.byteLength : e.data.length;
                    end = performance.now();
-                   //console.log(e.data);
                    var msg = "Round-trip time: " 
                              + (end - start).toFixed(0)
                              + " ms";
                    msg += "<br/>";          
-                   msg += "Received size: " + formatSize(e.data.length)
-                   if(e.data.length >= 1024) 
-                       msg += " (" + e.data.length + " bytes)" ;
+                   msg += "Received size: " + formatSize(length)
+                   if(length >= 1024) 
+                       msg += " (" + length + " bytes)" ;
 
                    $('div').css('font-family', 'Courier New');
                    if(validData(e.data)) $('div').css('color', 'blue');
@@ -60,6 +58,7 @@
 
                };
                function sendText(sz) {
+                    binary = false; 
                     var buffer = new Array(); 
 
                     for(var i = 0; i < sz; i++) buffer[i] = ELEMENT_VALUE;
@@ -69,6 +68,7 @@
                     websocket.send(sbuf);
                }
                function sendBinary(sz) {
+                    binary = true;
                     var sbuf = new Uint8Array(sz);
                     for(var i = 0; i < sz; i++) sbuf[i] = 17;//ELEMENT_VALUE;
                     start = performance.now(); 
