@@ -26,7 +26,9 @@
                window.WebSocket = window.WebSocket || window.MozWebSocket;
 
                var websocket = new WebSocket('ws://127.0.0.1:9001',
-                                             'myprotocol-greedy');
+                                             'myprotocol-async');
+
+               websocket.binaryType = "arraybuffer";
 
                websocket.onopen = function () {
                    $('h1').css('color', 'green');
@@ -37,6 +39,10 @@
                    console.log(e.msg);
                };
                websocket.onmessage = function (e) {
+                   for(key in e.data)
+                      //if(e.hasOwnProperty(key))
+                        console.log(key + ": " + e[key]);
+                   console.log(e.data.size);     
                    end = performance.now();
                    //console.log(e.data);
                    var msg = "Round-trip time: " 
@@ -53,22 +59,39 @@
                    $('div').append($('<p>', { html:  msg }));
 
                };
+               function sendText(sz) {
+                    var buffer = new Array(); 
+
+                    for(var i = 0; i < sz; i++) buffer[i] = ELEMENT_VALUE;
+                   //websocket.send();
+                    var sbuf = buffer.join("");   
+                    start = performance.now(); 
+                    websocket.send(sbuf);
+               }
+               function sendBinary(sz) {
+                    var sbuf = new Uint8Array(sz);
+                    for(var i = 0; i < sz; i++) sbuf[i] = 17;//ELEMENT_VALUE;
+                    start = performance.now(); 
+                    websocket.send(sbuf);
+               }
                $('button').click(function(e) {
                   try {
-                   e.preventDefault();
-                   var buffer = new Array();
-                   //warning: Chrome 33.0.1750.117 has a websocket output size
-                   //limit of 64kb
-                   if($('input').val().length == 0) return;  
-                   var m = parseInt($('input').val());
-                   if(m < 1) alert("Size must be > 0");
-                   for(var i = 0; i < m; i++) buffer[i] = ELEMENT_VALUE;
-                   //websocket.send();
-                   start = performance.now(); 
-                   websocket.send(buffer.join(""));
-                   $('input').val('');
-                 } catch(e) {
-                    console.log(e);
+                      e.preventDefault();
+                      //warning: Chrome 33.0.1750.117 has a websocket output size
+                      //limit of 64kb
+                      if($('input').val().length == 0) return;  
+                      var m = parseInt($('input').val());
+                      if(m < 1) {
+                          alert("Size must be > 0");
+                          return;
+                      }
+                      if(($("[name='binary']").prop('checked'))) {
+                          sendBinary(m);    
+                      } else {
+                          sendText(m); 
+                      }
+                 } catch(except) {
+                    console.log(except.msg);
                  }
                });
            });
@@ -79,6 +102,7 @@
        <form>
            <p>Enter message size:</p>
            <input type="text" />
+           <input type="checkbox" name="binary" value="binary"/>
            <button>Send</button>
        </form>
        <div></div>

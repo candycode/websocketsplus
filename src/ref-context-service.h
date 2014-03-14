@@ -4,6 +4,12 @@ using Buffer  = std::vector< char >;
 using Buffers = std::vector< Buffer >;
 using BufferMap = std::map< void*, Buffers >;
 
+#ifdef BINARY_DATA
+#define BINARY_OPTION true
+#else 
+#define BINARY_OPTION false
+#endif
+
 //------------------------------------------------------------------------------
 /// Context implementation: provides storage space to per-session services.
 /// A Context is created once when the libwebsockets context is created
@@ -77,7 +83,7 @@ public:
                   const char* fb, const char* fe,
                   bool b)
         : bufferBegin(bb), bufferEnd(be),
-          frameBegin(fe), frameEnd(fe) {}
+          frameBegin(fe), frameEnd(fe), binary(b) {}
  }; 
 public:
     /// Deleted default constructor; object must always be created by a
@@ -86,7 +92,10 @@ public:
     /// Constructor taking a reference to a Context instance. This constructor
     /// is invoked when a new connection is established through a call to 
     /// a placement new
-    SessionService(Context*) {}
+    SessionService(Context*) 
+        : writeDataFrame_(nullptr, nullptr, nullptr, nullptr, BINARY_OPTION) {
+
+        }
     /// libwebsockets requires the send buffer to be pre and post padded
     /// properly; in case this service returns a properly padded buffer then
     /// this method returns @c true @c false otherwise. In case the buffer is not

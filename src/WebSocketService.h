@@ -425,7 +425,8 @@ int WebSocketService::WSCallback(
             if(p) c->InitProtocol(p->name);
         }
         break;
-        case LWS_CALLBACK_RECEIVE: { 
+        case LWS_CALLBACK_RECEIVE: {
+            std::cout << int(((unsigned char*) in)[0]) << std::endl; 
             S* s = reinterpret_cast< S* >(user);
             const bool done = libwebsockets_remaining_packet_payload(wsi) == 0;
             s->Put(in, len, done);
@@ -447,10 +448,7 @@ int WebSocketService::WSCallback(
             const bool allSent = Send< C, S >(context, wsi, user,
                                               GREEDY_OPTION);
 
-            if( !allSent
-                || type == Type::STREAM
-                || type == Type::PUB_SUB) {    
-            
+            if( !allSent) {    
                 libwebsocket_callback_on_writable(context, wsi);
             }
 
