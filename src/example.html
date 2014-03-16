@@ -6,9 +6,14 @@
   "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
        <script type="text/javascript">
            var start, end;
-           var ELEMENT_VALUE = '3'; 
+           var binary = false;   
            function validData(d) {
-               //for(var i in d) if(d[i] !== ELEMENT_VALUE) return false;
+               for(var i in d)
+                   //using != instead of !== because I do need type coercion:
+                   //in case of ASCII data I want the numeric result of '%'
+                   //operation to be automatically converted to the type of
+                   //d[i] which is a char type
+                   if(d[i] != i % 10) return false;
                return true;
            }
            function formatSize(sz) {
@@ -22,8 +27,6 @@
                }
            }
            $(function() {
-
-               var binary = false;   
 
                window.WebSocket = window.WebSocket || window.MozWebSocket;
 
@@ -41,8 +44,8 @@
                    console.log(e.msg);
                };
                websocket.onmessage = function (e) {
-                   var length = binary ? e.data.byteLength : e.data.length;
                    end = performance.now();
+                   var length = binary ? e.data.byteLength : e.data.length;
                    var msg = "Round-trip time: " 
                              + (end - start).toFixed(0)
                              + " ms";
@@ -58,27 +61,36 @@
 
                };
                function sendText(sz) {
+                  try {
                     binary = false; 
                     var buffer = new Array(); 
-
-                    for(var i = 0; i < sz; i++) buffer[i] = ELEMENT_VALUE;
-                   //websocket.send();
+                    for(var i = 0; i < sz; i++) buffer[i] = i % 10;
                     var sbuf = buffer.join("");   
                     start = performance.now(); 
                     websocket.send(sbuf);
+                  } catch(except) {
+                    console.log(except);
+                  }
                }
                function sendBinary(sz) {
+                  try {
                     binary = true;
                     var sbuf = new Uint8Array(sz);
-                    for(var i = 0; i < sz; i++) sbuf[i] = 17;//ELEMENT_VALUE;
+                    for(var i = 0; i < sz; i++) sbuf[i] = i % 10;
                     start = performance.now(); 
                     websocket.send(sbuf);
+                  } catch(except) {
+                    console.log(except);
+                  }  
                }
                $('button').click(function(e) {
                   try {
+                      // for(w in websocket) {
+                      //   console.log(w + ": " + websocket[w]);
+                      // }
                       e.preventDefault();
                       //warning: Chrome 33.0.1750.117 has a websocket output size
-                      //limit of 64kb
+                      //limit of 64kB
                       if($('input').val().length == 0) return;  
                       var m = parseInt($('input').val());
                       if(m < 1) {
@@ -90,8 +102,9 @@
                       } else {
                           sendText(m); 
                       }
+                      console.log(websocket.bufferedAmount);
                  } catch(except) {
-                    console.log(except.msg);
+                    console.log(except);
                  }
                });
            });
@@ -102,7 +115,7 @@
        <form>
            <p>Enter message size:</p>
            <input type="text" />
-           <input type="checkbox" name="binary" value="binary"/>
+           Binary<input type="checkbox" name="binary" value="binary"/>
            <button>Send</button>
        </form>
        <div></div>
