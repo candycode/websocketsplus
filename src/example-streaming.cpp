@@ -1,21 +1,24 @@
 //author: Ugo Varetto
-//Test driver for WebSocketService and reference implementation of Context 
-//and Service interfaces
+//Test driver for WebSocketService streaming feature
 //Interface requirements:
 //  * Context must provide reusable storage space to per-session service
 //    instances to avoid reallocating memory at each request-reply
-//  * Service is a per-session instance which handles requests and replies
-//    through the Put and Get methods
+//  * Context must also provice a place to store time of last per-session
+//    write in order to support throttling features  
+//  * Service is a per-session instance which streams data at each Get request
 #include <iostream>
 #include <string>
 #include <chrono>
 #include <ctime>
 #include <sstream>
 #include "WebSocketService.h"
-#include "ref-context-service.h"
+#include "Context.h"
+#include "ServiceSession.h"
 
 
-class StreamService : public SessionService {
+//------------------------------------------------------------------------------
+/// Time service: streams current date and time
+class StreamService : public SessionService< wsp::Context > {
 public:
     using DataFrame = SessionService::DataFrame;
     StreamService(Context* c) : SessionService(c), time_(0x100, 0) {}
@@ -25,19 +28,22 @@ public:
         const system_clock::time_point now = system_clock::now();
         out_.str("");
         const std::time_t tt = system_clock::to_time_t(now);
-        out_ << count++; //ctime(&tt);
+        out_ << ctime(&tt);
         tmpstr_ = out_.str();
         std::copy(tmpstr_.begin(), tmpstr_.end(), time_.begin());
         df_= DataFrame(&time_[0], &(time_[0]) + time_.size(),
                        &time_[0], &(time_[0]) + time_.size(), false);
         return df_; 
     }
+    std::chrono::duration< double > 
+    MinDelayBetweenWrites() const {
+        return std::chrono::duration< double >(1);
+    }
 private:    
     std::vector< char > time_;
     DataFrame df_;
     std::ostringstream out_;
     std::string tmpstr_;
-    int count = 0;
 };
 
 

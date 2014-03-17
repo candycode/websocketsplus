@@ -1,6 +1,5 @@
 //author: Ugo Varetto
-//Test driver for WebSocketService and reference implementation of Context 
-//and Service interfaces
+//Test driver for WebSocketService 
 //Interface requirements:
 //  * Context must provide reusable storage space to per-session service
 //    instances to avoid reallocating memory at each request-reply
@@ -8,7 +7,8 @@
 //    through the Put and Get methods
 #include <iostream>
 #include "WebSocketService.h"
-#include "ref-context-service.h"
+#include "Context.h"
+#include "ServiceSession.h"
 
 
 //------------------------------------------------------------------------------
@@ -23,6 +23,7 @@ int main(int, char**) {
         std::cout << WSS::Level(level) << "> " << msg << std::endl;
     };
     WSS::SetLogger(log, "NOTICE", "WARNING", "ERROR");
+    using Service = SessionService< wsp::Context >;
     //init service
     ws.Init(9001, //port
             nullptr, //SSL certificate path
@@ -31,14 +32,14 @@ int main(int, char**) {
             //protocol->service mapping
             //sync request-reply: at each request a reply is immediately sent
             //to the client
-            WSS::Entry< SessionService, WSS::REQ_REP >("myprotocol"),
+            WSS::Entry< Service, WSS::REQ_REP >("myprotocol"),
             //async: requests and replies are handled asynchronously
-            WSS::Entry< SessionService, WSS::ASYNC_REP >("myprotocol-async"),
+            WSS::Entry< Service, WSS::ASYNC_REP >("myprotocol-async"),
              //async: requests and replies are handled asynchronously
-            WSS::Entry< SessionService, WSS::REQ_REP,
+            WSS::Entry< Service, WSS::REQ_REP,
                         WSS::SendMode::SEND_GREEDY >("myprotocol-greedy"),
              //async: requests and replies are handled asynchronously
-            WSS::Entry< SessionService, WSS::ASYNC_REP,
+            WSS::Entry< Service, WSS::ASYNC_REP,
                         WSS::SendMode::SEND_GREEDY >("myprotocol-async-greedy")//, 16384)
     );
     //start event loop: one iteration every >= 50ms
