@@ -49,7 +49,7 @@ private:
     BufferMap buffers_;    
 };
 
-/// Per-session (between a socket open and close) service instance, this is
+/// Per-session (between a socket open and close) echo service instance, this is
 /// the class that handles incoming requests and sends back replies.
 /// SessionService instances get created when a WebSocket connection is
 /// established and deleted when the connection terminates.
@@ -83,7 +83,7 @@ public:
                   const char* fb, const char* fe,
                   bool b)
         : bufferBegin(bb), bufferEnd(be),
-          frameBegin(fe), frameEnd(fe), binary(b) {}
+          frameBegin(fb), frameEnd(fe), binary(b) {}
  }; 
 public:
     /// Deleted default constructor; object must always be created by a
@@ -144,14 +144,22 @@ public:
     virtual void UpdateOutBuffer(int writtenBytes) {
         writeDataFrame_.frameBegin += writtenBytes;
     }
-    /// 
+    /// Set size of suggested send chunk size; WebSocketService might
+    /// decide to use a different size if/when needed 
     virtual void SetSuggestedOutChunkSize(int cs) {
         suggestedWriteChunkSize_ = cs;
     }
-    ///
+    /// Get size of send chunk size; WebSocketService might decide to use
+    /// a different value when/if needed
     virtual int GetSuggestedOutChunkSize() const {
         return suggestedWriteChunkSize_;
     } 
+    /// Return @true if sending is not finished.
+    /// Called from within a socket write event handler to decide if a new
+    /// write callback needs to be rescheduled for further writing
+    virtual bool Sending() const {
+        return false;
+    }
     /// Destroy service instance by cleaning up all used resources. Ususally
     /// this is implemented by explicitly invoking the destructor since no
     /// delete is never executed on this instance which is always created
@@ -166,6 +174,7 @@ private:
         writeDataFrame_.frameBegin  = writeDataFrame_.bufferBegin;
         writeDataFrame_.frameEnd    = writeDataFrame_.frameBegin;
     }
+protected:    
     /// virtual destructor, never called through delete since instances of
     /// this class are always created through a placement new call
     virtual ~SessionService() {}    

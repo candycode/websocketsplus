@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+   <head>
+       <meta charset="utf-8">
+       <script src=
+  "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+       <script type="text/javascript">
+          
+          $(function() {
+              window.WebSocket = window.WebSocket || window.MozWebSocket;
+              var out = $("[name='output']");
+              var websocket = new WebSocket('ws://127.0.0.1:9002',
+                                            'myprotocol-stream');
+              websocket.onopen = function () {
+                  $('h1').css('color', 'green');
+              };
+
+              websocket.onerror = function (e) {
+                $('h1').css('color', 'red');
+                console.log(e);
+              };
+              websocket.onmessage = function (e) {
+                 out.text(e.data);
+              };
+           });
+       </script>
+       </head>
+   <body>
+       <h1>WebSockets stream test</h1>
+       <div><p name="output"></p></div>
+   </body>
+</html>
+
