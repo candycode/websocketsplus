@@ -413,7 +413,7 @@ int WebSocketService::WSCallback(
     switch (reason) {
         case LWS_CALLBACK_ESTABLISHED: {
             C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
-            c->CreateBuffers(user);
+            c->InitSession(user);
             new (user) S(c);
             if(type == Type::STREAM) {
                 libwebsocket_callback_on_writable(context, wsi);
@@ -448,11 +448,19 @@ int WebSocketService::WSCallback(
         case LWS_CALLBACK_SERVER_WRITEABLE: {
             C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
             S* s = reinterpret_cast< S* >(user);
-            if(c->ElapsedWriteTime(user) < s->MinDelayBetweenWrites()) break;
-            const bool GREEDY_OPTION = sm == SendMode::SEND_(GREEDY;
+            if(c->ElapsedWriteTime(user) < s->MinDelayBetweenWrites()) {
+                libwebsocket_callback_on_writable(context, wsi);
+                break;
+            }
+            const bool GREEDY_OPTION = sm == SendMode::SEND_GREEDY;
             const bool allSent = Send< C, S >(context, wsi, user,
                                               GREEDY_OPTION);
-            c->RecordWriteTime(user);
+            //if data still pending reset timer, if not data will have to wait 
+            //until next available time frame, the timer is reset to current
+            //time - min delay time to ensure that the next write operation is
+            //executed 
+            if(!allSent) c->ResetWriteTimer(user, s->MinDelayBetweenWrites());
+            else c->RecordWriteTime(user);
             if(!allSent 
                || s->Sending() 
                || type == Type::STREAM
@@ -466,7 +474,7 @@ int WebSocketService::WSCallback(
         case LWS_CALLBACK_CLOSED:
             reinterpret_cast< S* >(user)->Destroy();
             reinterpret_cast< C* >(libwebsocket_context_user(context))
-                                                          ->RemoveBuffers(user);
+                                                          ->Clear(user);
 
         break;
         default:
