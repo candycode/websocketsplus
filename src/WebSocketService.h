@@ -448,11 +448,11 @@ int WebSocketService::WSCallback(
         case LWS_CALLBACK_SERVER_WRITEABLE: {
             C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
             S* s = reinterpret_cast< S* >(user);
-            if(c->WriteTimeDiff(user) < s->MinWriteTimeDiff()) break;
+            if(c->ElapsedWriteTime(user) < s->MinDelayBetweenWrites()) break;
             const bool GREEDY_OPTION = sm == SendMode::SEND_(GREEDY;
             const bool allSent = Send< C, S >(context, wsi, user,
                                               GREEDY_OPTION);
-            c->RecordWriteCallTime(user);
+            c->RecordWriteTime(user);
             if(!allSent 
                || s->Sending() 
                || type == Type::STREAM

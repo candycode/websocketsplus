@@ -1,4 +1,10 @@
 #pragma once
+
+#include <vector>
+#include <map>
+#include <chrono>
+#include <stdexcept>
+
 //Reference implementations of context and service
 using Buffer  = std::vector< char >;
 using Buffers = std::vector< Buffer >;
@@ -58,7 +64,7 @@ public:
             writeTimers_.find(user)->second;
         const std::chrono::steady_clock::time_point now = steady_clock::now();
         return std::chrono::duration_cast<
-                    std::chrono::duration< double >(now - t);
+                    std::chrono::duration< double > >(now - t);
     }
     void RemoveTimers(void* user) {
         if(writeTimers_.find(user) == writeTimers_.end()) {
@@ -194,6 +200,11 @@ public:
     virtual void Destroy() {
         this->~SessionService();
     }
+    /// Minimum delay between consecutive writes in seconds.
+    virtual const std::chrono::duration< double >& 
+    MinDelayBetweenWrites() const {
+        return minWriteDelay_;
+    }
 private:
     void UpdateWriteDataFrame() {
         writeDataFrame_.bufferBegin = &buffer_[0];
@@ -221,4 +232,6 @@ private:
     bool prevReadCompleted_ = true;
     /// Suggested write chunk size; will be updated in case it is too big.
     int suggestedWriteChunkSize_ = 4096;
+    /// Min delay between consecutive writes
+    std::chrono::duration< double > minWriteDelay_ = 1.0; //1s
 };
