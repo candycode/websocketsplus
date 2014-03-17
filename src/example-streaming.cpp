@@ -46,6 +46,7 @@ public:
         const std::time_t tt = system_clock::to_time_t(now);
         out_ << ctime(&tt);
         tmpstr_ = out_.str();
+        time_.resize(tmpstr_.size());
         std::copy(tmpstr_.begin(), tmpstr_.end(), time_.begin());
         df_= DataFrame(&time_[0], &(time_[0]) + time_.size(),
                        &time_[0], &(time_[0]) + time_.size(), false);
