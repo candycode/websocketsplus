@@ -3,6 +3,7 @@
 using Buffer  = std::vector< char >;
 using Buffers = std::vector< Buffer >;
 using BufferMap = std::map< void*, Buffers >;
+using TimerMap = std::map< void*, std::chrono::steady_clock::time_point >
 
 #ifdef BINARY_DATA
 #define BINARY_OPTION true
@@ -41,12 +42,38 @@ public:
         assert(buffers_.find(p) != buffers_.end());
         buffers_.erase(buffers_.find(p));
     }
+    void Clear(void* user) {
+        RemoveBuffers(user);
+        RemoveTimers(user);
+    }
+    void RecordWriteTime(void* user) {
+        writeTimers_[user] = std::chrono::steady_clock::now();
+    }
+    std::chrono::duration< double > ElapsedWriteTime(void* user) const {
+        if(writeTimers_.find(user) == writeTimers_.end()) {
+            throw std::logic_error(
+                "Cannot find service instance in write timers");
+        }
+        const std::chrono::steady_clock::time_point t = 
+            writeTimers_.find(user)->second;
+        const std::chrono::steady_clock::time_point now = steady_clock::now();
+        return std::chrono::duration_cast<
+                    std::chrono::duration< double >(now - t);
+    }
+    void RemoveTimers(void* user) {
+        if(writeTimers_.find(user) == writeTimers_.end()) {
+            throw std::logic_error(
+                "Cannot find service instance in write timers");
+        }
+        writeTimers_.erase(writeTimers_.find(user));
+    }
     /// Perform websocket protocol initialization
     void InitProtocol(const char*) {}    
 private:
     /// per-session buffer map; maps per-session user data pointer
     /// to buffer array
     BufferMap buffers_;    
+    TimerMap writeTimers_;
 };
 
 /// Per-session (between a socket open and close) echo service instance, this is
