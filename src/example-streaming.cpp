@@ -13,7 +13,7 @@
 #include <sstream>
 #include "WebSocketService.h"
 #include "Context.h"
-#include "ServiceSession.h"
+#include "SessionService.h"
 
 
 //------------------------------------------------------------------------------
