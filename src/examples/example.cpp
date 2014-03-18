@@ -22,8 +22,8 @@
 //  * Service is a per-session instance which handles requests and replies
 //    through the Put and Get methods
 #include <iostream>
-#include "WebSocketService.h"
-#include "Context.h"
+#include "../WebSocketService.h"
+#include "../Context.h"
 #include "SessionService.h"
 
 
@@ -40,6 +40,7 @@ int main(int, char**) {
     };
     WSS::SetLogger(log, "NOTICE", "WARNING", "ERROR");
     using Service = SessionService< wsp::Context >;
+    const int readBufferSize = 4096; //the default anyway
     //init service
     ws.Init(9001, //port
             nullptr, //SSL certificate path
@@ -48,18 +49,19 @@ int main(int, char**) {
             //protocol->service mapping
             //sync request-reply: at each request a reply is immediately sent
             //to the client
-            WSS::Entry< Service, WSS::REQ_REP >("myprotocol"),
+            WSS::Entry< Service, WSS::REQ_REP >("myprotocol", readBufferSize),
             //async: requests and replies are handled asynchronously
             WSS::Entry< Service, WSS::ASYNC_REP >("myprotocol-async"),
-             //async: requests and replies are handled asynchronously
+            //sync request with greedy send: all the data chunks are sent in
+            //a loop
             WSS::Entry< Service, WSS::REQ_REP,
                         WSS::SendMode::SEND_GREEDY >("myprotocol-greedy"),
-             //async: requests and replies are handled asynchronously
+             //async request with greedy send
             WSS::Entry< Service, WSS::ASYNC_REP,
-                        WSS::SendMode::SEND_GREEDY >("myprotocol-async-greedy")//, 16384)
+                        WSS::SendMode::SEND_GREEDY >("myprotocol-async-greedy")
     );
     //start event loop: one iteration every >= 50ms
-    ws.StartLoop(1, //ms
+    ws.StartLoop(50, //ms
                  []{return true;} //termination condition (exit on false)
                                   //checked at each iteration, loops forever
                                   //in this case

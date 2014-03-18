@@ -34,33 +34,72 @@ using Protocols = std::vector< libwebsocket_protocols >;
 
 //------------------------------------------------------------------------------
 //TYPE INTERFACES
+
 //Context:
-//  vector< char >& GetBuffer(void* user, int bufferIndex);
-//  void CreateBuffers(void* user, int numberOfBuffer,
-//                     size_t bufferSize, char initValue) 
-//  void RemoveBuffers(void* user)
-//  void InitProtocol(const char* name) //one time webscoket
-//                                      //protocol initialization
-//Service
-//  Service(Context)
-//  bool Data() true if some data is available
-//  DataFrame Get(int requestedChunkLength)
-//  struct DataFrame {
-//    const char* bufferBegin;
-//    const char* bufferEnd;
-//    const char* frameBegin;
-//    const char* frameEnd;
-//    bool binary;
-//  }; //DataFrame must be a member type of Service
-//  (void PadOutput(char* begin, int length);_ not required (yet?)
-//  void Put(void* buffer, size_t length, bool done) called when data received
-//  void DataFrame Get() called by run-time when data need to be sent
-//  void Destroy() should call ~Service
-//  bool PreformattedBuffer() true if already contains padding
-//  int GetSuggestedOutChunkSize()
-//  void SetSuggestedOutChunkSize(int)
-//  void UpdateOutBuffer(DataFrame, bytesWritten)
-//  bool Sending()
+// /// @param p pointer key indexing the per-session buffer arrays; this is
+// ///        the parameter received in the libwebsockets handler function
+// /// @param i buffer index
+// Buffer& GetBuffer(void* p, int i) 
+// /// Record current time into write timer map
+// void RecordWriteTime(void* user) 
+// /// Compute time elapsed between time of call and value stored into
+// /// write timer map
+// std::chrono::duration< double > ElapsedWriteTime(void* user) const 
+// /// Perform websocket protocol initialization
+// void InitProtocol(const char*)
+// /// Per-session initialization: buffers and timers
+// void InitSession(void* p, int n = 1, std::size_t s = 1, char d = '\0')
+// /// Set value of write timer to now - passed value; this is usually used
+// /// to ensure that the next write operation succeeds by ensuring that the
+// /// delay is > that the minimum delay between writes
+// void ResetWriteTimer(void* user, const std::chrono::duration< double >& d)
+// /// Release per-session resources
+// void Clear(void* user) 
+
+
+//Service:
+// /// Deleted default constructor; object must always be created by a
+// /// placement new with the Service(Context*) constructor.
+// SessionService() = delete;
+// /// Constructor taking a reference to a Context instance. This constructor
+// /// is invoked when a new connection is established through a call to 
+// /// a placement new
+// SessionService(Context*) 
+// /// libwebsockets requires the send buffer to be pre and post padded
+// /// properly; in case this service returns a properly padded buffer then
+// /// this method returns @c true @c false otherwise. In case the buffer is not
+// /// pre-formatted WebSocketService takes care of the formatting by
+// /// performing an additional copy of the data into another buffer.
+// virtual bool PreformattedBuffer() const
+// /// Returns true if data is ready, false otherwise. In this case Data()
+// /// returns @c false after each Get() to make sure that data in buffer
+// /// is returned only once:
+// virtual bool Data() const 
+// /// Returns a reference to the data to send; called when libwebsockets needs
+// /// to send data to clients;
+// /// @param binary @true if data is in binary format, @false if it is text
+// virtual const DataFrame& Get(int requestedChunkLength) const 
+// /// Called when libwebsockets receives data from clients
+// virtual void Put(void* p, size_t len, bool done)
+// /// Update write data frame 
+// virtual void UpdateOutBuffer(int writtenBytes)
+// /// Set size of suggested send chunk size; WebSocketService might
+// /// decide to use a different size if/when needed 
+// virtual void SetSuggestedOutChunkSize(int cs)
+// /// Get size of send chunk size; WebSocketService might decide to use
+// /// a different value when/if needed
+// virtual int GetSuggestedOutChunkSize() const
+// /// Return @true if sending is not finished.
+// /// Called from within a socket write event handler to decide if a new
+// /// write callback needs to be rescheduled for further writing
+// virtual bool Sending() const
+// /// Destroy service instance by cleaning up all used resources. Ususally
+// /// this is implemented by explicitly invoking the destructor since no
+// /// delete is never executed on this instance which is always created
+// /// through a placement new in the first place
+// virtual void Destroy()
+// /// Minimum delay between consecutive writes in seconds.
+// virtual std::chrono::duration< double > MinDelayBetweenWrites() const
 
 
 //-----------------------------------------------------------------------------
@@ -91,8 +130,7 @@ public:
     /// - REQ_REP: sync request-reply
     /// - ASYNC_REP: async reply
     /// - STREAM: async send only    
-    /// - PUB_SUB: single request, mutliple async replies
-    enum Type {REQ_REP, ASYNC_REP, STREAM, PUB_SUB};
+    enum Type {REQ_REP, ASYNC_REP, STREAM};
     ///Send mode:
     /// - SEND_GREEDY: data is retrieved form service and sent in a loop
     ///                until no more data is available
@@ -216,15 +254,6 @@ public:
                           | LLL_EXT
                           | LLL_CLIENT
                           | LLL_LATENCY, &LogFunction);
-        // lws_set_log_level(LLL_WARN, &LogFunction);
-        // lws_set_log_level(LLL_NOTICE, &LogFunction);
-        // lws_set_log_level(LLL_INFO, &LogFunction);
-        // lws_set_log_level(LLL_DEBUG, &LogFunction);
-        // lws_set_log_level(LLL_PARSER, &LogFunction);
-        // lws_set_log_level(LLL_HEADER, &LogFunction);
-        // lws_set_log_level(LLL_EXT, &LogFunction);
-        // lws_set_log_level(LLL_CLIENT, &LogFunction);
-        // lws_set_log_level(LLL_LATENCY, &LogFunction);
     }
     /// Set log handlers for scpecific log levels only.
     /// @tparam F callable object type to invoke
@@ -258,7 +287,7 @@ public:
         else return levels_.find(lws_log_levels(ll))->second;
     }
 private:
-    ///
+    /// 
     template < typename T, typename... S >
     static lws_log_levels ComposeLogLevels(lws_log_levels prev,
                                     const T& l, const S&... rest) {
@@ -455,8 +484,7 @@ int WebSocketService::WSCallback(
                   reinterpret_cast< C* >(libwebsocket_context_user(context));
                 if(!Send< C, S >(context, wsi, user, GREEDY_OPTION))
                     libwebsocket_callback_on_writable(context, wsi); 
-            } else if((type == Type::ASYNC_REP || type == Type::PUB_SUB)
-                      && done) {
+            } else if(type == Type::ASYNC_REP && done) {
                   libwebsocket_callback_on_writable(context, wsi); 
             }
         }
@@ -479,8 +507,7 @@ int WebSocketService::WSCallback(
             else c->RecordWriteTime(user);
             if(!allSent 
                || s->Sending() 
-               || type == Type::STREAM
-               || type == Type::PUB_SUB) {
+               || type == Type::STREAM) {
 
                 libwebsocket_callback_on_writable(context, wsi);
             }

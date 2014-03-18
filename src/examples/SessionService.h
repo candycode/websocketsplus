@@ -59,13 +59,13 @@ public:
         /// @param be pointer to first element after the end of the buffer
         /// @param fb pointer to first element of sub-buffer
         /// @param fe pointer to fitst element after the end of the sub-buffer
-        ///         to send
+        ///        to send
         DataFrame(const char* bb, const char* be,
                   const char* fb, const char* fe,
                   bool b)
         : bufferBegin(bb), bufferEnd(be),
           frameBegin(fb), frameEnd(fe), binary(b) {}
- }; 
+    }; 
 public:
     /// Deleted default constructor; object must always be created by a
     /// placement new with the Service(Context*) constructor.

@@ -19,26 +19,36 @@
 // data frame information returned by Service::Get() and used
 // to send data to clients
 
-///Information on data frame to write
+/// Data frame to be sent to client.
+/// <code>frameBegin == bufferEnd</code> signals the end of writing
+/// operations; <code>frameBegin == bufferBegin</code> signals the
+/// beginning of writing operations.
+/// DataFrame must be an inner type of the Service type used in the
+/// WebSocketService class; either implement your own or include this file
+/// and add a typedef/using declaration inside the Service type
 struct DataFrame {
-    ///start of global buffer to send
+    /// Start of buffer
     const char* bufferBegin = nullptr;
-    ///one byte past the end of global buffer to send
+    /// One element past last element of buffer
     const char* bufferEnd = nullptr;
-    ///start of data packet to send must be between
-    ///@c bufferBegin and @c bufferEnd
+    /// Start of sub-region of buffer to operate on
     const char* frameBegin = nullptr;
-    ///one byte past end of the packet to send, must lie
-    ///between @c frameBegin and @c bufferEnd
+    /// One element past the end of the sub-region of the buffer to
+    /// operate on
     const char* frameEnd = nullptr;
-    ///@c true if data is binary, @c false otherwise
-    bool binary = false;  
-    DataFrame(const char* bb,
-              const char* be,
-              const char* fb,
-              const char* fe,
+    /// @c true if data is binary, @c false if it is text
+    bool binary = false;
+    /// Default constructor
+    DataFrame() = default;
+    /// Constructor
+    /// @param bb pointer to first element of buffer
+    /// @param be pointer to first element after the end of the buffer
+    /// @param fb pointer to first element of sub-buffer
+    /// @param fe pointer to fitst element after the end of the sub-buffer
+    ///        to send
+    DataFrame(const char* bb, const char* be,
+              const char* fb, const char* fe,
               bool b)
-        : bufferBegin(bb), bufferEnd(be), frameBegin(fb),
-        frameEnd(fe), binary(b) {}
-    DataFrame() = default; 
-};
+    : bufferBegin(bb), bufferEnd(be),
+      frameBegin(fb), frameEnd(fe), binary(b) {}
+}; 

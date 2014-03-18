@@ -27,7 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           $(function() {
               window.WebSocket = window.WebSocket || window.MozWebSocket;
               var out = $("[name='output']");
-              var websocket = new WebSocket('ws://127.0.0.1:9002',
+              var websocket = new WebSocket('ws://127.0.0.1:9001',
                                             'myprotocol-stream');
               websocket.onopen = function () {
                   $('h1').css('color', 'green');

@@ -27,8 +27,8 @@
 #include <chrono>
 #include <ctime>
 #include <sstream>
-#include "WebSocketService.h"
-#include "Context.h"
+#include "../WebSocketService.h"
+#include "../Context.h"
 #include "SessionService.h"
 
 
@@ -77,7 +77,7 @@ int main(int, char**) {
     };
     WSS::SetLogger(log, "NOTICE", "WARNING", "ERROR");
     //init service
-    ws.Init(9002, //port
+    ws.Init(9001, //port
             nullptr, //SSL certificate path
             nullptr, //SSL key path
             Context(), //context instance, will be copied internally
