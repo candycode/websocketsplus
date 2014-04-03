@@ -104,6 +104,7 @@ private:
         df_.bufferEnd = df_.bufferBegin + ctx_->GetServiceData().images[frameCounter_].size();
         df_.frameBegin = df_.bufferBegin;
         df_.frameEnd = df_.frameBegin;
+        df_.binary = true;
     }    
 private:    
     DataFrame df_;

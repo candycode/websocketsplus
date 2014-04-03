@@ -48,7 +48,7 @@ public:
         time_.resize(tmpstr_.size());
         std::copy(tmpstr_.begin(), tmpstr_.end(), time_.begin());
         df_= DataFrame(&time_[0], &(time_[0]) + time_.size(),
-                       &time_[0], &(time_[0]) + time_.size(), false);
+                       &time_[0], &(time_[0]) + time_.size(), true);
         return df_; 
     }
     std::chrono::duration< double > 

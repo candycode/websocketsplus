@@ -27,8 +27,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           $(function() {
               window.WebSocket = window.WebSocket || window.MozWebSocket;
               var out = $("[name='output']");
+              var img = document.querySelector( "#photo" );
+              var blob = new Blob( [], { type: "image/jpeg" } );
+              var urlCreator = window.URL || window.webkitURL;
+              var imageUrl;
+
               var websocket = new WebSocket('ws://127.0.0.1:5000',
                                             'image-stream');
+              websocket.binaryType = "arraybuffer";
               websocket.onopen = function () {
                   $('h1').css('color', 'green');
               };
@@ -37,15 +43,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 $('h1').css('color', 'red');
                 console.log(e);
               };
+              var start = performance.now();
+              var elapsed = 0;
+              var frames = 0;
               websocket.onmessage = function (e) {
-                 console.log(e.data.byteLength);
+                 frames++;
+                 elapsed = performance.now() - start;
+                 //out.text(e.data.byteLength);
+                 out.text((1000 * frames / elapsed).toFixed(0));
+                 //arrayBufferView = e.data;
+                 blob = new Blob( [e.data], { type: "image/jpeg" } );
+                 imageUrl = urlCreator.createObjectURL( blob );
+                 img.src = imageUrl;
               };
            });
        </script>
        </head>
    <body>
        <h1>WebSockets stream test</h1>
-       <div><p name="output"></p></div>
+       <div>Frame/s: <p name="output"></p></div>
+       <div><img id="photo"/></div>
    </body>
 </html>
 
