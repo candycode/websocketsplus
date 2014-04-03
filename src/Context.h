@@ -30,11 +30,26 @@ using Buffers = std::vector< Buffer >;
 using BufferMap = std::map< void*, Buffers >;
 using TimerMap = std::map< void*, std::chrono::steady_clock::time_point >;
 
+struct ServiceDataEmpty {};
+
 //------------------------------------------------------------------------------
 /// Context implementation: provides storage space to per-session services.
 /// A Context is created once when the libwebsockets context is created
 /// and destroyed when the WebSocketService instance is destroyed.
+/// @tparam ServiceDataT convenience type to store service specific data
+///         without having to create a separate Context class.
+///         ServiceDataT instances are used to share data among all the 
+///         instances of per-session service instances
+template < typename ServiceDataT = ServiceDataEmpty >
 class Context {
+public:
+    using ServiceData = ServiceDataT;
+    /// Default constructor
+    Context() {} 
+    /// Constructor accepting a ServiceData type instance
+    Context(const ServiceData& sd) : serviceData_(sd) {}
+    /// Return constant reference to ServiceData instance
+    const ServiceData& ServiceData() const { return serviceData_; }
 public:
     /// Return reference to buffer
     /// @param p pointer key indexing the per-session buffer arrays; this is
@@ -122,6 +137,7 @@ private:
     /// to buffer array
     BufferMap buffers_;    
     TimerMap writeTimers_;
+    ServiceData serviceData_;
 };
 
 } //namespace wsp 
