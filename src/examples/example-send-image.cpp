@@ -91,7 +91,8 @@ public:
         } else {
             frameCounter_ = (frameCounter_ + 1) % ctx_->GetServiceData().images.size();  
             InitDataFrame();
-        }  
+        }
+        return df_;  
     }
     std::chrono::duration< double > 
     MinDelayBetweenWrites() const {
