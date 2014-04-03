@@ -39,13 +39,13 @@ int main(int, char**) {
         std::cout << WSS::Level(level) << "> " << msg << std::endl;
     };
     WSS::SetLogger(log, "NOTICE", "WARNING", "ERROR");
-    using Service = SessionService< wsp::Context >;
+    using Service = SessionService< Context<> >;
     const int readBufferSize = 4096; //the default anyway
     //init service
     ws.Init(9001, //port
             nullptr, //SSL certificate path
             nullptr, //SSL key path
-            Context(), //context instance, will be copied internally
+            Context<>(), //context instance, will be copied internally
             //protocol->service mapping
             //sync request-reply: at each request a reply is immediately sent
             //to the client

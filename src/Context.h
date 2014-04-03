@@ -48,8 +48,10 @@ public:
     Context() {} 
     /// Constructor accepting a ServiceData type instance
     Context(const ServiceData& sd) : serviceData_(sd) {}
+    /// Copy constructor
+    Context(const Context& c) : buffers_(c.buffers_), writeTimers_(c.writeTimers_), serviceData_(c.serviceData_) {}
     /// Return constant reference to ServiceData instance
-    const ServiceData& ServiceData() const { return serviceData_; }
+    const ServiceData& GetServiceData() const { return serviceData_; }
 public:
     /// Return reference to buffer
     /// @param p pointer key indexing the per-session buffer arrays; this is

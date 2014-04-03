@@ -31,10 +31,9 @@
 #include "../Context.h"
 #include "SessionService.h"
 
-
 //------------------------------------------------------------------------------
 /// Time service: streams current date and time
-class StreamService : public SessionService< wsp::Context > {
+class StreamService : public SessionService< wsp::Context<> > {
 public:
     using DataFrame = SessionService::DataFrame;
     StreamService(Context* c) : SessionService(c), time_(0x100, 0) {}
@@ -65,7 +64,7 @@ private:
 
 
 //------------------------------------------------------------------------------
-/// Simple echo test driver, check below 'main' for matching html client code 
+/// Stream current time 
 int main(int, char**) {
     using namespace wsp;
     using WSS = WebSocketService;
@@ -80,7 +79,7 @@ int main(int, char**) {
     ws.Init(9001, //port
             nullptr, //SSL certificate path
             nullptr, //SSL key path
-            Context(), //context instance, will be copied internally
+            Context<>(), //context instance, will be copied internally
             WSS::Entry< StreamService, WSS::STREAM >("myprotocol-stream"));
     //start event loop: one iteration every >= 50ms
     ws.StartLoop(5000, //ms

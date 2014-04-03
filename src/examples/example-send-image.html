@@ -1,6 +1,6 @@
 <!--
 Websockets+ : C++11 server-side websocket library based on libwebsockets;
-               supports easy creation of services and built-in throttling
+              supports easy creation of services and built-in throttling
 Copyright (C) 2014  Ugo Varetto
 
 This program is free software: you can redistribute it and/or modify
@@ -15,8 +15,7 @@ GNU Lesser General Public License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
- --> 
-
+-->
 <!DOCTYPE html>
 <html>
    <head>
@@ -24,120 +23,29 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
        <script src=
   "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
        <script type="text/javascript">
-           var start, end;
-           var binary = false;   
-           function validData(d) {
-               for(var i in d)
-                   //using != instead of !== because I do need type coercion:
-                   //in case of ASCII data I want the numeric result of '%'
-                   //operation to be automatically converted to the type of
-                   //d[i] which is a char type
-                   if(d[i] != i % 10) return false;
-               return true;
-           }
-           function formatSize(sz) {
-               if(sz < 1) return "-";
-               if(sz < 1024) {
-                return sz + " bytes";
-               } else if(sz >= 1024 && sz < 1024*1024) {
-                  return (sz / 1024).toFixed(2) + " kB";
-               } else if(sz >= 1024 * 1024) {
-                  return (sz / (1024 * 1024)).toFixed(2) + " MB";
-               }
-           }
-           $(function() {
+          
+          $(function() {
+              window.WebSocket = window.WebSocket || window.MozWebSocket;
+              var out = $("[name='output']");
+              var websocket = new WebSocket('ws://127.0.0.1:5000',
+                                            'image-stream');
+              websocket.onopen = function () {
+                  $('h1').css('color', 'green');
+              };
 
-               window.WebSocket = window.WebSocket || window.MozWebSocket;
-
-               var websocket = new WebSocket('ws://127.0.0.1:9001',
-                                             'myprotocol-async');
-
-               websocket.binaryType = "arraybuffer";
-
-               websocket.onopen = function () {
-                   $('h1').css('color', 'green');
-               };
-
-               websocket.onerror = function (e) {
-                   $('h1').css('color', 'red');
-                   console.log(e.msg);
-               };
-               websocket.onmessage = function (e) {
-                   end = performance.now();
-                   var length = binary ? e.data.byteLength : e.data.length;
-                   var msg = "Round-trip time: " 
-                             + (end - start).toFixed(0)
-                             + " ms";
-                   msg += "<br/>";          
-                   msg += "Received size: " + formatSize(length)
-                   if(length >= 1024) 
-                       msg += " (" + length + " bytes)" ;
-
-                   $('div').css('font-family', 'Courier New');
-                   if(validData(e.data)) $('div').css('color', 'blue');
-                   else $('div').css('color', 'red');
-                   $('div').append($('<p>', { html:  msg }));
-
-               };
-               function sendText(sz) {
-                  try {
-                    binary = false; 
-                    var buffer = new Array(); 
-                    for(var i = 0; i < sz; i++) buffer[i] = i % 10;
-                    var sbuf = buffer.join("");   
-                    start = performance.now(); 
-                    websocket.send(sbuf);
-                  } catch(except) {
-                    console.log(except);
-                  }
-               }
-               function sendBinary(sz) {
-                  try {
-                    binary = true;
-                    var sbuf = new Uint8Array(sz);
-                    for(var i = 0; i < sz; i++) sbuf[i] = i % 10;
-                    start = performance.now(); 
-                    websocket.send(sbuf);
-                  } catch(except) {
-                    console.log(except);
-                  }  
-               }
-               $('button').click(function(e) {
-                  try {
-                      // for(w in websocket) {
-                      //   console.log(w + ": " + websocket[w]);
-                      // }
-                      e.preventDefault();
-                      //warning: Chrome 33.0.1750.117 has a websocket output size
-                      //limit of 64kB
-                      if($('input').val().length == 0) return;  
-                      var m = parseInt($('input').val());
-                      if(m < 1) {
-                          alert("Size must be > 0");
-                          return;
-                      }
-                      if(($("[name='binary']").prop('checked'))) {
-                          sendBinary(m);    
-                      } else {
-                          sendText(m); 
-                      }
-                      console.log(websocket.bufferedAmount);
-                 } catch(except) {
-                    console.log(except);
-                 }
-               });
+              websocket.onerror = function (e) {
+                $('h1').css('color', 'red');
+                console.log(e);
+              };
+              websocket.onmessage = function (e) {
+                 console.log(e.data.byteLength);
+              };
            });
        </script>
        </head>
    <body>
-       <h1>WebSockets test</h1>
-       <form>
-           <p>Enter message size:</p>
-           <input type="text" />
-           Binary<input type="checkbox" name="binary" value="binary"/>
-           <button>Send</button>
-       </form>
-       <div></div>
+       <h1>WebSockets stream test</h1>
+       <div><p name="output"></p></div>
    </body>
 </html>
 
