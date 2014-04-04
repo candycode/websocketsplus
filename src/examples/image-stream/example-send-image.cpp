@@ -29,9 +29,9 @@
 #include <fstream>
 #include <algorithm>
 #include <iterator>
-#include "../WebSocketService.h"
-#include "../Context.h"
-#include "SessionService.h"
+#include "../../WebSocketService.h"
+#include "../../Context.h"
+#include "../SessionService.h"
 
 using namespace std;
 
@@ -39,7 +39,8 @@ using Image = std::vector< char >;
 
 struct Images {
     std::vector< Image > images;
-    void Load(int numFrames, const string& prefix, int loadFrames) {
+    void Load(int numFrames, const string& prefix,
+              int loadFrames, const string& format) {
         int numDigits = 0;
         int n = numFrames;
         while(n > 0) {
@@ -51,7 +52,7 @@ struct Images {
             string fname = prefix;
             const string fn = to_string(i);
             for(int z = 0; z != numDigits - fn.size(); ++z) fname += "0";
-            fname += to_string(i) + ".jpg";
+            fname += to_string(i) + "." + format;
             cout << fname << endl;
             //file size
             std::ifstream in(fname, std::ifstream::in
@@ -120,10 +121,11 @@ private:
 //------------------------------------------------------------------------------
 /// Stream sequence of images in a loop 
 int main(int argc, char** argv) {
-    if(argc < 4) {
+    if(argc < 5) {
         cout << "usage: " << argv[0] 
-             << "<total number of images> <image full prefix"
-                "e.g. /path/to/images/imageprefix> <number of images to load>"
+             << "<total number of images> <image full prefix "
+                "e.g. /path/to/images/imageprefix> <number of images to load> "
+                "<image file extension>"
              << endl;
         return 0;     
     }
@@ -137,7 +139,7 @@ int main(int argc, char** argv) {
     };
     WSS::SetLogger(log, "NOTICE", "WARNING", "ERROR");
     Images images;
-    images.Load(stoi(argv[1]), argv[2], stoi(argv[3]));
+    images.Load(stoi(argv[1]), argv[2], stoi(argv[3]), argv[4]);
     //init service
     ws.Init(5000, //port
             nullptr, //SSL certificate path

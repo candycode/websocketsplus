@@ -26,16 +26,27 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           
           $(function() {
               window.WebSocket = window.WebSocket || window.MozWebSocket;
+              //var MIME_TYPE = "image/jpeg";
+              var MIME_TYPE = "image/png";
+              //var MIME_TYPE = "image/webp"; //"image/webp" for Chrome only
               var out = $("[name='output']");
+              var bytes = $("[name='bytes']");
               var img = new Image();
-              var blob = new Blob( [], { type: "image/jpeg" } );
+              var blob = new Blob( [], { type: MIME_TYPE } );
               var urlCreator = window.URL || window.webkitURL;
               var imageUrl;
               var canvas = document.querySelector( "#canvas" );
+              var WIDTH = 1920;
+              var HEIGHT = 1080;
               var context = canvas.getContext('2d');
-              context.fillStyle = "#FF0000";
-              context.fillRect(0,0,1920,1080);
-             
+              var maintainAspectRatio = false;
+              var ratio = 1080 / 1920;
+              
+              canvas.width = WIDTH;
+              canvas.height = HEIGHT;
+              context.fillStyle = "grey";
+              context.fillRect(0,0,WIDTH,HEIGHT);
+               
               img.onload = function() {
                 context.drawImage(img, 0, 0);
               }  
@@ -43,6 +54,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var websocket = new WebSocket('ws://127.0.0.1:5000',
                                             'image-stream');
               websocket.binaryType = "arraybuffer";
+             
+              function resizeCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                var w = canvas.width / WIDTH;
+                var h;
+                if(maintainAspectRatio) {
+                  h = w * ratio;
+                } else {
+                  h = canvas.height / HEIGHT;
+                }                       
+                context.scale(w, h);
+              }
+              window.addEventListener('resize', resizeCanvas, false);  
+
               websocket.onopen = function () {
                   $('h1').css('color', 'green');
               };
@@ -55,23 +81,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var elapsed = 0;
               var frames = 0;
               websocket.onmessage = function (e) {
-                 frames++;
-                 elapsed = performance.now() - start;
-                 //out.text(e.data.byteLength);
-                 out.text((1000 * frames / elapsed).toFixed(0));
-                 //arrayBufferView = e.data;
-                 blob = new Blob( [e.data], { type: "image/jpeg" } );
-                 imageUrl = urlCreator.createObjectURL( blob );
-                 img.src = imageUrl;
-
+                frames++;
+                elapsed = performance.now() - start;
+                bytes.text(e.data.byteLength);
+                out.text((1000 * frames / elapsed).toFixed(0));
+                blob = new Blob( [e.data], { type: MIME_TYPE } );
+                imageUrl = urlCreator.createObjectURL( blob );
+   
+                img.src = imageUrl;
+               
               };
            });
        </script>
        </head>
    <body>
+    <div style="color: red; font-size: 300%">
        <h1>WebSockets stream test</h1>
-       <div id="text"><p>Frame/s:</p><p name="output"></p></div>
-       <div><canvas id="canvas" width="1920" height="1080"></canvas></div>
+       <div>Frame/s: <span name="output"></span></div>
+       <div>Size: <span name="bytes"></span> bytes</div>
+       <div><!--width="1920" height="1080"-->
+    </div>
+    <canvas id="canvas" 
+                style="z-index: -1;position:fixed; top:0;left:0"></canvas></div>            
    </body>
 </html>
 

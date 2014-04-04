@@ -1,6 +1,10 @@
 April 4 2014
+
+
 Hardware/Software configuration not relevant, same speed obtained
 on a mix of 2008 to 2012 desktops/laptops running Mac OS and Linux.
+
+With jpeg:
 
 Firefox: 45-47 fps!
 Chrome: 31-33
@@ -11,7 +15,57 @@ Same speed with or without Canvas 2D *BUT*:
   with or without Canvas 2D
 
 Using the image as the page background does cause a lot of flickering. 
-Use Canvas with style="position:fixed; top:0;left:0" instead of background image
+Use Canvas with style="position:fixed; top:0;left:0" instead of background
+image.
  
-With Chrome closing the main window is fine but closing a single tab results
-in an exception on the server
+With Chrome closing the main window results in an send error on the server.
+No problems with Firefox when closing either the program or a tab.
+
+Changing the size of the canvas doesn't affect the performance.
+
+Using PNG instead of JPEG I get better fps in general.
+
+-------------
+OPTIMAL SETUP
+-------------
+
+All the following data were gathered on a 2008 Linux box with a Penryn class
+cpu and an NVIDIA GTX 280 graphics card.
+OS is Ubuntu 13.04.
+
+Chrome
+------
+Background canvas
+Webp or jpeg at 50% quality (no noticeable different from uncompressed version,
+webp has better quality)
+41 fps on a 2008 Linux box with a GTX280 NVIDIA card;
+when using two screens I get 39-40 on one and ~35 on the other
+
+with webp
+---------
+Selecting a quality of 25% reduced the size of 15% compared to 50% quality
+and does not increase the fps (~1)
+
+Selecting a quality of 75-80% increases the size by 20% compared to 50% and
+does decrease the frame rate to 37-39 from 41-42
+
+A quality of 10% results in frames that are 30% smaller than 50% quality and
+an fps count of 43-45
+
+In all cases webp is the fasted to encode the images on the server and decode
+on the client
+
+Firefox
+-------
+Use jpeg with 50-60% quality: 49fps
+
+
+Using a low quality jpeg is better than a low quality webp.
+
+
+IN GENERAL: USING A 75-80% jpeg, webp or PNG gives the best results:
+38fps on Chrome and >45 on Firefox with size of about < 30% best quality case.
+
+
+
+
