@@ -50,8 +50,7 @@ struct Images {
             //file name
             string fname = prefix;
             const string fn = to_string(i);
-            for(int z = 0; z != numDigits - fn.size(); ++z)
-                fname += "0";
+            for(int z = 0; z != numDigits - fn.size(); ++z) fname += "0";
             fname += to_string(i) + ".jpg";
             cout << fname << endl;
             //file size
@@ -60,13 +59,17 @@ struct Images {
             if(!in) throw std::runtime_error("cannot open file");
             in.seekg(0, ios::end);
             const size_t fileSize = in.tellg();
-            Image img;
-            img.reserve(fileSize);
-            //read
             in.seekg(0, ios::beg);
-            img.assign(istreambuf_iterator<char>(in),
-                       istreambuf_iterator<char>());
-
+            Image img;
+            
+            //read
+            //slow:
+            //img.reserve(fileSize);
+            //img.assign(istreambuf_iterator<char>(in),
+            //           istreambuf_iterator<char>());
+            //fast:
+            img.resize(fileSize);
+            in.read(&img[0], img.size());
             images.push_back(img);
         }
     }

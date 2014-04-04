@@ -1,0 +1,17 @@
+April 4 2014
+Hardware/Software configuration not relevant, same speed obtained
+on a mix of 2008 to 2012 desktops/laptops running Mac OS and Linux.
+
+Firefox: 45-47 fps!
+Chrome: 31-33
+
+Same speed with or without Canvas 2D *BUT*:
+- on Firefox Canvas is required to avoid flickering
+- Chrome is always much slower than Firefox in any HW/SW configuration
+  with or without Canvas 2D
+
+Using the image as the page background does cause a lot of flickering. 
+Use Canvas with style="position:fixed; top:0;left:0" instead of background image
+ 
+With Chrome closing the main window is fine but closing a single tab results
+in an exception on the server
