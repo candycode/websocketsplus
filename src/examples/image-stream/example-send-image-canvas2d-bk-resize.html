@@ -20,6 +20,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <html>
    <head>
        <meta charset="utf-8">
+       <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0px;
+            border: 0;
+            overflow: hidden; /*  Disable scrollbars */
+            display: block;  /* No floating content on sides */
+        }
+    </style>
        <script src=
   "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
        <script type="text/javascript">
@@ -58,8 +68,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
              
 
               function resizeCanvas() {
-                var width = window.innerWidth;
+                // var width = $(window).innerWidth();
+                // var height = $(window).innerHeight();
+                var width = window.outerWidth;
                 var height = window.innerHeight;
+
 
                 if(width > height) {
                   canvas.height = height;
@@ -72,7 +85,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 var w = canvas.width / WIDTH;
                 var h = canvas.height / HEIGHT;     
                 context.scale(w, h);
-                alert(w + " " + h + " " + (width / WIDTH));
+                //alert(w + " " + h + " " + (width / WIDTH));
               }
               window.addEventListener('resize', resizeCanvas, true);  
 
@@ -104,16 +117,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 img.src = imageUrl;
               };
               resizeCanvas();
+
            });
        </script>
        </head>
-   <body>
+   <body style="margin: 0; padding: 0">
     <div style="color: red; font-size: 300%">
        <h1>WebSockets stream test</h1>
        <div>Frame/s: <span name="output"></span></div>
        <div>Size: <span name="bytes"></span> bytes</div>
        <div><!--width="1920" height="1080"-->
     </div>
+
     <canvas id="canvas" 
                 style="z-index: -1;position:fixed; top:0;left:0"></canvas></div>            
    </body>
