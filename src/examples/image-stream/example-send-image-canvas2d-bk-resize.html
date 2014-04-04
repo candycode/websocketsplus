@@ -68,20 +68,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
              
 
               function resizeCanvas() {
-                // var width = $(window).innerWidth();
-                // var height = $(window).innerHeight();
-                var width = window.outerWidth;
+                var width = window.innerWidth;
                 var height = window.innerHeight;
 
 
                 if(width > height) {
                   canvas.height = height;
-                  canvas.width = canvas.height / ratio;
+                  canvas.width = height / ratio;
                  
                 } else {
-                   canvas.width = width;
-                  canvas.height = canvas.width * ratio;
-                }  
+                  canvas.width = width;
+                  canvas.height = width * ratio;
+                }
+                //canvas.height = width * ratio;
+                //canvas.width = width;  
                 var w = canvas.width / WIDTH;
                 var h = canvas.height / HEIGHT;     
                 context.scale(w, h);
@@ -121,7 +121,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
            });
        </script>
        </head>
-   <body style="margin: 0; padding: 0">
+   <body>
     <div style="color: red; font-size: 300%">
        <h1>WebSockets stream test</h1>
        <div>Frame/s: <span name="output"></span></div>
