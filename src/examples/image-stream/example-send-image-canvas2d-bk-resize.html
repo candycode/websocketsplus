@@ -36,10 +36,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           
           $(function() {
               window.WebSocket = window.WebSocket || window.MozWebSocket;
-              //var MIME_TYPE = "image/jpeg";
+              var MIME_TYPE = "image/jpeg";
               //var MIME_TYPE = "image/png";
-              var MIME_TYPE = "image/webp"; //"image/webp" for Chrome only
-              //var MIME_TYPE = "";
+              //var MIME_TYPE = "image/webp"; //"image/webp" for Chrome only
+              //var MIME_TYPE = ""; //does work but get a warning in the console
               var out = $("[name='output']");
               var bytes = $("[name='bytes']");
               var img = new Image();
@@ -80,8 +80,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                   canvas.width = width;
                   canvas.height = width * ratio;
                 }
-                //canvas.height = width * ratio;
-                //canvas.width = width;  
+                canvas.height = width * ratio;
+                canvas.width = width;  
                 var w = canvas.width / WIDTH;
                 var h = canvas.height / HEIGHT;     
                 context.scale(w, h);

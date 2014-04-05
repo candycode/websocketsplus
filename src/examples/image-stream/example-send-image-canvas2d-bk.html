@@ -58,13 +58,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var elapsed = 0;
               var frames = 0;
               websocket.onmessage = function (e) {
-                 frames++;
-                 elapsed = performance.now() - start;
-                 bytes.text(e.data.byteLength);
-                 out.text((1000 * frames / elapsed).toFixed(0));
-                 blob = new Blob( [e.data], { type: "image/jpeg" } );
-                 imageUrl = urlCreator.createObjectURL( blob );
-                 img.src = imageUrl;
+                if(imageUrl)
+                  urlCreator.revokeObjectURL(imageUrl);
+                frames++;
+                elapsed = performance.now() - start;
+                bytes.text(e.data.byteLength);
+                out.text((1000 * frames / elapsed).toFixed(0));
+                blob = new Blob( [e.data], { type: "image/jpeg" } );
+                imageUrl = urlCreator.createObjectURL( blob );
+                img.src = imageUrl;
               };
            });
        </script>

@@ -48,15 +48,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var elapsed = 0;
               var frames = 0;
               websocket.onmessage = function (e) {
+                if(imageUrl)
+                  urlCreator.revokeObjectURL(imageUrl);
                  frames++;
                  elapsed = performance.now() - start;
                  //out.text(e.data.byteLength);
                  out.text((1000 * frames / elapsed).toFixed(0));
                  //arrayBufferView = e.data;
-                 blob = new Blob( [e.data], { type: "image/jpeg" } );
+                 //blob = new Blob( [e.data], { type: "image/jpeg" } );
+                 blob = new Blob( [e.data], { type: "image/webp" } );
                  imageUrl = urlCreator.createObjectURL( blob );
-                 //img.src = imageUrl;
-                 b.background = imageUrl;
+                 img.src = imageUrl;
               };
            });
        </script>
@@ -64,7 +66,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
    <body>
        <h1>WebSockets stream test</h1>
        <div>Frame/s: <p name="output"></p></div>
-       <!--<div><img id="photo"/></div>-->
+       <div><img id="photo" style="width: 960px; height: 540px; display: block; margin-left: auto; margin-right: auto"/></div>
    </body>
 </html>
 
