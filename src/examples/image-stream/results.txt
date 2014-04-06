@@ -28,6 +28,9 @@ Using PNG instead of JPEG I get better fps in general.
 With large images Firefox always outperforms Chrome by a big margin, e.g. with 
 a 4k full quality image: Chrome - 3 fps, Firefox 21 fps.
 
+The best solution to stream 4k images is to use webp (13fps, at max quality or
+)
+
 -------------
 OPTIMAL SETUP
 -------------
