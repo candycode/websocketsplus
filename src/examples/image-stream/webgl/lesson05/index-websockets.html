@@ -66,7 +66,7 @@
         websocket.onmessage = function (e) {
             if(imageUrl)
                 urlCreator.revokeObjectURL(imageUrl);
-            blob = new Blob( [e.data], { type: "image/webp" } );
+            blob = new Blob( [e.data], { type: "image/jpeg" } );
             imageUrl = urlCreator.createObjectURL( blob );
             wsTexture.image.src = imageUrl;
         }
@@ -76,7 +76,12 @@
         }
     }
 //
-
+// PERFORMANCE
+    var start = null;
+    var elapsed = 0;
+    var frames = 0;
+    var fps;
+//
 
     var gl;
 
@@ -157,16 +162,25 @@
         shaderProgram.samplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
     }
 
-
     function handleLoadedTexture(texture) {
         if(!connected) return;
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
         //gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, texture.image);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        
+        //parameters for NPOT textures
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); 
+        //gl.NEAREST is also allowed, instead of gl.LINEAR, as neither mipmap.
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); 
+        //Prevents s-coordinate wrapping (repeating).
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); 
+        //Prevents t-coordinate wrapping (repeating).
+
         gl.bindTexture(gl.TEXTURE_2D, null);
+
     }
 
     var mvMatrix = mat4.create();
@@ -354,14 +368,19 @@
 
 
     function tick() {
+        if(!start) start = performance.now();
         if(!connected)
             requestAnimFrame(tick);
         drawScene();
         animate();
+        frames++;
+        elapsed = performance.now() - start;
+        fps.innerText=((1000 * frames / elapsed).toFixed(0));
     }
 
 
     function webGLStart() {
+        fps = document.querySelector( "#fps" );
         var canvas = document.getElementById("lesson05-canvas");
         initGL(canvas);
         initShaders();
@@ -389,12 +408,16 @@
 
 
 <body onload="webGLStart();">
-    <a href="http://learningwebgl.com/blog/?p=507">&lt;&lt; Back to Lesson 5</a><br />
+    
 
-    <canvas id="lesson05-canvas" style="border: none;" width="500" height="500"></canvas>
+    <canvas id="lesson05-canvas" style="border: none; position: fixed; top:0; left:0; z-index: -1;"
+    width="500" height="500"></canvas>
+    <div style="color: red; font-size: 100%">
+       <div>Frame/s: <span id="fps"></span></div>
+       
+    </div>
 
-    <br/>
-    <a href="http://learningwebgl.com/blog/?p=507">&lt;&lt; Back to Lesson 5</a><br />
+   
 </body>
 
 </html>
