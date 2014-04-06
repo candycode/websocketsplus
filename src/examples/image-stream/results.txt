@@ -31,6 +31,16 @@ a 4k full quality image: Chrome - 3 fps, Firefox 21 fps.
 The best solution to stream 4k images is to use webp (13fps, at max quality or
 )
 
+Streaming to a WebGL texture has similar performance to streaming to a Canvas2D.
+
+Best solution is to stream to an <img> but for high frame rates (>35) flickering
+might be a problem on Firefox, not sure about Chrome, got flickering once but
+not reproducible.
+
+Streaming to multiple browsers on the same machine does not seem to have a big
+impact on performance (decrease of 10 to 15%).
+
+
 -------------
 OPTIMAL SETUP
 -------------
