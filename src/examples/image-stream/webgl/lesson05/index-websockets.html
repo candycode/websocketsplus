@@ -375,12 +375,12 @@
         animate();
         frames++;
         elapsed = performance.now() - start;
-        fps.innerText=((1000 * frames / elapsed).toFixed(0));
+        fps.textContent = ((1000 * frames / elapsed).toFixed(0));
     }
 
 
     function webGLStart() {
-        fps = document.querySelector( "#fps" );
+        fps = document.getElementById( "fps" );
         var canvas = document.getElementById("lesson05-canvas");
         initGL(canvas);
         initShaders();
@@ -393,7 +393,8 @@
             tick();
         }
 
-        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.clearColor(0.0, 0.0, 0.0, 0.0); //alpha=0 makes the background
+                                           //transparent
         gl.enable(gl.DEPTH_TEST);
         initWebSockets();
         if(!connected)
@@ -410,9 +411,9 @@
 <body onload="webGLStart();">
     
 
-    <canvas id="lesson05-canvas" style="border: none; position: fixed; top:0; left:0; z-index: -1;"
-    width="500" height="500"></canvas>
-    <div style="color: red; font-size: 100%">
+    <canvas id="lesson05-canvas" style="overflow: scroll; border: none; position: absolute; top:0; left:0; z-index: -1;"
+    width="1920" height="1080"></canvas>
+    <div style="color: red; font-size: 100%; position: fixed">
        <div>Frame/s: <span id="fps"></span></div>
        
     </div>
