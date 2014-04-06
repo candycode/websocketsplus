@@ -33,11 +33,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var urlCreator = window.URL || window.webkitURL;
               var imageUrl;
               var canvas = document.querySelector( "#canvas" );
-              canvas.width = 1920;
-              canvas.height = 1080;
+              //4k: 3840x2160
+              //Retina 15": 2880x1800
+              //HD: 1920x1080
+              canvas.width = 3840;//1920;
+              canvas.height = 2160;//1080;
               var context = canvas.getContext('2d');
-              context.fillStyle = "grey";
-              context.fillRect(0,0,1920,1080);
+              //context.fillStyle = "grey";
+              //context.fillRect(0,0,1920,1080);
              
               img.onload = function() {
                 context.drawImage(img, 0, 0);

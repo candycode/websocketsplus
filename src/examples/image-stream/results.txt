@@ -25,6 +25,9 @@ Changing the size of the canvas doesn't affect the performance.
 
 Using PNG instead of JPEG I get better fps in general.
 
+With large images Firefox always outperforms Chrome by a big margin, e.g. with 
+a 4k full quality image: Chrome - 3 fps, Firefox 21 fps.
+
 -------------
 OPTIMAL SETUP
 -------------
@@ -65,6 +68,16 @@ Using a low quality jpeg is better than a low quality webp.
 
 IN GENERAL: USING A 75-80% jpeg, webp or PNG gives the best results:
 38fps on Chrome and >45 on Firefox with size of about < 30% best quality case.
+
+Canvas 2D vs plain img
+----------------------
+
+No difference in performance, canvas 2d allows for more flexibility.
+
+With canvas 2d no noticing flickering in both Chrome and Firefox; without
+canvas 2d there might be some flickering in Firefox when panning over a large
+image.
+
 
 
 
