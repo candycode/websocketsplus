@@ -135,7 +135,8 @@ public:
     virtual int GetSuggestedOutChunkSize() const {
         return suggestedWriteChunkSize_;
     } 
-    /// Return @true if sending is not finished.
+    /// Return @true if sending is not finished. To implement streaming
+    /// always return true.
     /// Called from within a socket write event handler to decide if a new
     /// write callback needs to be rescheduled for further writing
     virtual bool Sending() const {

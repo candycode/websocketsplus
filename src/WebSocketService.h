@@ -129,8 +129,7 @@ public:
     ///Communication type:
     /// - REQ_REP: sync request-reply
     /// - ASYNC_REP: async reply
-    /// - STREAM: async send only    
-    enum Type {REQ_REP, ASYNC_REP, STREAM};
+    enum Type {REQ_REP, ASYNC_REP};
     ///Send mode:
     /// - SEND_GREEDY: data is retrieved form service and sent in a loop
     ///                until no more data is available
@@ -460,7 +459,8 @@ int WebSocketService::WSCallback(
             C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
             c->InitSession(user);
             new (user) S(c);
-            if(type == Type::STREAM) {
+            const S* s = reinterpret_cast< const S* >(user);
+            if(s->Sending()) {
                 libwebsocket_callback_on_writable(context, wsi);
             }
         }
@@ -474,7 +474,6 @@ int WebSocketService::WSCallback(
         }
         break;
         case LWS_CALLBACK_RECEIVE: {
-            if(type == Type::STREAM) break;
             S* s = reinterpret_cast< S* >(user);
             const bool done = libwebsockets_remaining_packet_payload(wsi) == 0;
             s->Put(in, len, done);
@@ -506,8 +505,7 @@ int WebSocketService::WSCallback(
             if(!allSent) c->ResetWriteTimer(user, s->MinDelayBetweenWrites());
             else c->RecordWriteTime(user);
             if(!allSent 
-               || s->Sending() 
-               || type == Type::STREAM) {
+               || s->Sending()) {
 
                 libwebsocket_callback_on_writable(context, wsi);
             }

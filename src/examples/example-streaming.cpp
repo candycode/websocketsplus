@@ -51,6 +51,9 @@ public:
                        &time_[0], &(time_[0]) + time_.size(), true);
         return df_; 
     }
+    // streaming implementation:
+    bool Sending() const { return true; }
+    void Put(void* p, size_t len, bool done) override {}
     std::chrono::duration< double > 
     MinDelayBetweenWrites() const {
         return std::chrono::duration< double >(1);
@@ -80,7 +83,7 @@ int main(int, char**) {
             nullptr, //SSL certificate path
             nullptr, //SSL key path
             Context<>(), //context instance, will be copied internally
-            WSS::Entry< StreamService, WSS::STREAM >("myprotocol-stream"));
+            WSS::Entry< StreamService, WSS::ASYNC_REP >("myprotocol-stream"));
     //start event loop: one iteration every >= 50ms
     ws.StartLoop(5000, //ms
                  []{return true;} //termination condition (exit on false)

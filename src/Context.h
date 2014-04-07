@@ -49,7 +49,9 @@ public:
     /// Constructor accepting a ServiceData type instance
     Context(const ServiceData& sd) : serviceData_(sd) {}
     /// Copy constructor
-    Context(const Context& c) : buffers_(c.buffers_), writeTimers_(c.writeTimers_), serviceData_(c.serviceData_) {}
+    Context(const Context& c) 
+        : buffers_(c.buffers_), writeTimers_(c.writeTimers_),
+          serviceData_(c.serviceData_) {}
     /// Return constant reference to ServiceData instance
     const ServiceData& GetServiceData() const { return serviceData_; }
 public:

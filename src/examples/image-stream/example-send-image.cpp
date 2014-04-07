@@ -86,18 +86,22 @@ public:
      SessionService(c), ctx_(c), frameCounter_(0) {
         InitDataFrame();
     }
-    bool Data() const { return true; }
+    bool Data() const override { return true; }
     const DataFrame& Get(int requestedChunkLength) {
         if(df_.frameEnd < df_.bufferEnd) {
            df_.frameBegin = df_.frameEnd;
            df_.frameEnd += min((ptrdiff_t) requestedChunkLength, 
                                df_.bufferEnd - df_.frameEnd);
         } else {
-            frameCounter_ = (frameCounter_ + 1) % ctx_->GetServiceData().images.size();  
+            frameCounter_ = (frameCounter_ + 1) 
+                            % ctx_->GetServiceData().images.size();  
             InitDataFrame();
         }
         return df_;  
     }
+    //streaming: always in send mode, no receive
+    bool Sending() const override { return true; }
+    void Put(void* p, size_t len, bool done) override {}
     std::chrono::duration< double > 
     MinDelayBetweenWrites() const {
         return std::chrono::duration< double >(0.01);
@@ -105,7 +109,8 @@ public:
 private:
     void InitDataFrame() {
         df_.bufferBegin = &(ctx_->GetServiceData().images[frameCounter_][0]);
-        df_.bufferEnd = df_.bufferBegin + ctx_->GetServiceData().images[frameCounter_].size();
+        df_.bufferEnd = df_.bufferBegin 
+                        + ctx_->GetServiceData().images[frameCounter_].size();
         df_.frameBegin = df_.bufferBegin;
         df_.frameEnd = df_.frameBegin;
         df_.binary = true;
@@ -144,8 +149,9 @@ int main(int argc, char** argv) {
     ws.Init(5000, //port
             nullptr, //SSL certificate path
             nullptr, //SSL key path
-            Context< Images >(images), //context instance, will be copied internally
-            WSS::Entry< ImageService, WSS::STREAM >("image-stream"));
+            Context< Images >(images), //context instance,
+                                       //will be copied internally
+            WSS::Entry< ImageService, WSS::ASYNC_REP >("image-stream"));
     //start event loop: one iteration every >= 50ms
     ws.StartLoop(10, //ms
                  []{return true;} //termination condition (exit on false)
