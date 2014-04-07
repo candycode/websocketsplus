@@ -87,9 +87,13 @@ public:
         InitDataFrame();
     }
     bool Data() const override { return true; }
+    //return data frame and update frame end
     const DataFrame& Get(int requestedChunkLength) {
         if(df_.frameEnd < df_.bufferEnd) {
-           df_.frameBegin = df_.frameEnd;
+           //frameBegin *MUST* be updated in the UpdateOutBuffer method
+           //because in case the consumed data is less than requestedChunkLength
+           // 
+           //df_.frameBegin = df_.frameEnd;
            df_.frameEnd += min((ptrdiff_t) requestedChunkLength, 
                                df_.bufferEnd - df_.frameEnd);
         } else {
@@ -98,6 +102,11 @@ public:
             InitDataFrame();
         }
         return df_;  
+    }
+    //update frame begin/end
+    void UpdateOutBuffer(int bytesConsumed) {
+        df_.frameBegin += bytesConsumed;
+        df_.frameEnd = df_.frameBegin;
     }
     //streaming: always in send mode, no receive
     bool Sending() const override { return true; }

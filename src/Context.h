@@ -52,8 +52,14 @@ public:
     Context(const Context& c) 
         : buffers_(c.buffers_), writeTimers_(c.writeTimers_),
           serviceData_(c.serviceData_) {}
-    /// Return constant reference to ServiceData instance
+    /// Return constant reference to ServiceData instance: this is what
+    /// services use to access data
     const ServiceData& GetServiceData() const { return serviceData_; }
+    /// Set service data: this is used by business logic to make data
+    /// available to services
+    void SetServiceData(const ServiceData& sd) {
+        serviceData_ = sd;
+    }
 public:
     /// Return reference to buffer
     /// @param p pointer key indexing the per-session buffer arrays; this is
