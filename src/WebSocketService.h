@@ -188,12 +188,15 @@ public:
     /// @param keyPath ssl key path
     /// @param c context instance copied to internal storage
     /// @param entries Entry list with protocol-service mapping information
+    /// @return reference to context allocated in libwebsockets memory space;
+    ///         reference will be invalid after libwebsockets context is
+    ///         destroyed
     template < typename ContextT, typename... ArgsT >
-    void Init(int port,
-              const char* certPath,
-              const char* keyPath,
-              const ContextT& c,
-              const ArgsT&...entries) {
+    ContextT& Init(int port,
+                   const char* certPath,
+                   const char* keyPath,
+                   const ContextT& c,
+                   const ArgsT&...entries) {
         Clear();
         if(certPath) certPath_ = certPath;
         if(keyPath) keyPath_  = keyPath; 
@@ -208,12 +211,14 @@ public:
                                                          : nullptr;
         info_.extensions = libwebsocket_get_internal_extensions();
         info_.options = 0;
-        info_.user = new ContextT(c);
+        ContextT* ctx = new ContextT(c);
+        info_.user = ctx;
         context_ = libwebsocket_create_context(&info_);
         if(!context_) 
             throw std::runtime_error("Cannot create WebSocket context");
         userDataDeleter_.reset(new Deleter< ContextT >(
             reinterpret_cast< ContextT* >(info_.user)));
+        return *ctx;
     }
     ///Next iteration: performs a single loop iteration calling
     ///libwebsocket_service

@@ -60,6 +60,9 @@ public:
     void SetServiceData(const ServiceData& sd) {
         serviceData_ = sd;
     }
+    void SetServiceData(ServiceData&& sd) {
+        serviceData_ = sd; //= operator must implement move operation
+    }
 public:
     /// Return reference to buffer
     /// @param p pointer key indexing the per-session buffer arrays; this is

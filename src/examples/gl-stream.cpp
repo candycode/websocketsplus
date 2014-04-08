@@ -6,6 +6,11 @@
 
 //g++ -std=c++11 gl-stream.cpp -I /usr/local/glfw/include -DGL_GLEXT_PROTOTYPES -L /usr/local/glfw/lib -lglfw -I /usr/local/glm/include -lGL -lwebp
 
+#include <cstdlib>
+#include <iostream>
+#include <vector>
+#include <memory>
+#include <fstream>
 
 #include <GLFW/glfw3.h>
 
@@ -16,11 +21,9 @@
 
 #include <webp/encode.h>
 
-#include <cstdlib>
-#include <iostream>
-#include <vector>
-#include <memory>
-#include <fstream>
+#include "../WebSocketService.h"
+#include "../Context.h"
+#include "SessionService.h"
 
 using namespace std;
 
@@ -53,9 +56,12 @@ using ImagePtr = shared_ptr< char >;
 
 struct Image {
     ImagePtr image;
-    size_t size;
+    size_t size = 0;
+    Image() = default;
     Image(ImagePtr i, size_t s) : image(i), size(s) {}
+    Image(const Image&) = default;
     Image(Image&&) = default;
+    Image& operator=(const Image&) = default;
     Image& operator=(Image&&) = default;
 };
 
@@ -167,6 +173,61 @@ const char vertexShaderSrc[] =
     "  UV = tex;\n"
     "}";   
 
+//==============================================================================
+//------------------------------------------------------------------------------
+/// Image service: streams a sequence of images
+class ImageService : public SessionService< wsp::Context< Image > > {
+    using Context = wsp::Context< Image >;
+public:
+    using DataFrame = SessionService::DataFrame;
+    ImageService(Context* c) :
+     SessionService(c), ctx_(c), frameCounter_(0) {
+        InitDataFrame();
+    }
+    bool Data() const override { return ctx_->GetServiceData().size > 0; }
+    //return data frame and update frame end
+    const DataFrame& Get(int requestedChunkLength) {
+        if(df_.frameEnd < df_.bufferEnd) {
+           //frameBegin *MUST* be updated in the UpdateOutBuffer method
+           //because in case the consumed data is less than requestedChunkLength
+           // 
+           //df_.frameBegin = df_.frameEnd;
+           df_.frameEnd += min((ptrdiff_t) requestedChunkLength, 
+                               df_.bufferEnd - df_.frameEnd);
+        } else {
+           InitDataFrame();
+        }
+        return df_;  
+    }
+    //update frame begin/end
+    void UpdateOutBuffer(int bytesConsumed) {
+        df_.frameBegin += bytesConsumed;
+        df_.frameEnd = df_.frameBegin;
+    }
+    //streaming: always in send mode, no receive
+    bool Sending() const override { return true; }
+    void Put(void* p, size_t len, bool done) override {}
+    std::chrono::duration< double > 
+    MinDelayBetweenWrites() const {
+        return std::chrono::duration< double >(0.01);
+    }
+private:
+    void InitDataFrame() {
+        df_.bufferBegin = ctx_->GetServiceData().image.get();
+        df_.bufferEnd = df_.bufferBegin 
+                        + ctx_->GetServiceData().size;
+        df_.frameBegin = df_.bufferBegin;
+        df_.frameEnd = df_.frameBegin;
+        df_.binary = true;
+    }    
+private:    
+    DataFrame df_;
+    Context* ctx_ = nullptr;
+    unsigned int frameCounter_ = 0;
+};
+
+
+//==============================================================================    
 
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
@@ -188,8 +249,19 @@ int main(int argc, char** argv) {
 
 
     //==========================================================================
-    using Context = wsp::Context< Image > C;
-    using ImageService< Context > 
+    using Context = wsp::Context< Image >;
+    using WSS = wsp::WebSocketService;
+    WSS imageStreamer;
+    WSS::ResetLogLevels(); 
+    //init service
+    Context& context = 
+    imageStreamer.Init(5000, //port
+                       nullptr, //SSL certificate path
+                       nullptr, //SSL key path
+                       Context(), //context instance,
+                       //will be copied internally
+                       WSS::Entry< ImageService,
+                           WSS::ASYNC_REP, WSS::SEND_GREEDY >("image-stream"));
     //==========================================================================
 
 
@@ -335,7 +407,7 @@ int main(int argc, char** argv) {
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
        
-        context.SetServiceData(ReadImage(width, height))
+        context.SetServiceData(ReadImage(width, height));
         imageStreamer.Next(); //send to client
         //glfwSwapBuffers(window);
         //glfwPollEvents();
