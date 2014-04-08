@@ -113,7 +113,7 @@ public:
     void Put(void* p, size_t len, bool done) override {}
     std::chrono::duration< double > 
     MinDelayBetweenWrites() const {
-        return std::chrono::duration< double >(0.01);
+        return std::chrono::duration< double >(0.001);
     }
 private:
     void InitDataFrame() {
