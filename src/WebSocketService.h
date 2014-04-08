@@ -25,9 +25,10 @@
 #include <map>
 #include <vector>
 #include <stdexcept>
+#include <memory>
+
 #include <libwebsockets.h>
 
-#include <iostream>
 namespace wsp {
 
 using Protocols = std::vector< libwebsocket_protocols >;
@@ -122,8 +123,9 @@ private:
         }
         ///Constructor
         /// @param c pointer to allocated memory
-        Deleter(C* c = 0) : d(c) {}
+        Deleter(C* c = 0, bool erase = true) : d(c), erase_(erase) {}
         C* d;
+        bool erase_ = true;
     };    
 public:
     ///Communication type:
@@ -219,6 +221,44 @@ public:
         userDataDeleter_.reset(new Deleter< ContextT >(
             reinterpret_cast< ContextT* >(info_.user)));
         return *ctx;
+    }
+    ///Create libwebsockets context
+    /// @tparam ContextT context type: used to store reusable char buffers
+    ///         as well as global and per-session configuration information   
+    /// @tparam ArgsT list of Entry types with protocol-service mapping
+    ///         information
+    /// @param port tcp/ip port
+    /// @param certPath ssl certificate path
+    /// @param keyPath ssl key path
+    /// @param c shared pointer wrapping a context instance
+    /// @param entries Entry list with protocol-service mapping information
+    template < typename ContextT, typename... ArgsT >
+    void Init(int port,
+              const char* certPath,
+              const char* keyPath,
+              std::shared_ptr< ContextT > c,
+              const ArgsT&...entries) {
+        Clear();
+        if(certPath) certPath_ = certPath;
+        if(keyPath) keyPath_  = keyPath; 
+        AddHandlers< ContextT >(entries...); 
+        protocolHandlers_.push_back({0,0,0,0}); //termination marker
+        info_.port = port;
+        info_.iface = nullptr;
+        info_.protocols = &protocolHandlers_[0];
+        info_.ssl_cert_filepath = certPath_.size() ? certPath_.c_str() 
+                                                   : nullptr;
+        info_.ssl_private_key_filepath = keyPath_.size() ? keyPath_.c_str() 
+                                                         : nullptr;
+        info_.extensions = libwebsocket_get_internal_extensions();
+        info_.options = 0;
+        info_.user = c.get();
+        context_ = libwebsocket_create_context(&info_);
+        if(!context_) 
+            throw std::runtime_error("Cannot create WebSocket context");
+        //do not delete context, will be deleted by shared_ptr when needed
+        userDataDeleter_.reset(new Deleter< ContextT >(
+            reinterpret_cast< ContextT* >(info_.user), false));
     }
     ///Next iteration: performs a single loop iteration calling
     ///libwebsocket_service

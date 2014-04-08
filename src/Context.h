@@ -55,6 +55,7 @@ public:
     /// Return constant reference to ServiceData instance: this is what
     /// services use to access data
     const ServiceData& GetServiceData() const { return serviceData_; }
+    ServiceData& GetServiceData() { return serviceData_; }
     /// Set service data: this is used by business logic to make data
     /// available to services
     void SetServiceData(const ServiceData& sd) {
