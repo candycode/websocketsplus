@@ -25,7 +25,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <CImg.h>
+#include <webp/encode.h>
 
 #include "../WebSocketService.h"
 #include "../Context.h"
@@ -48,10 +48,6 @@ const GLenum GL_REAL_T = GL_FLOAT;
 #define gle 
 #endif                      
 
-
-
-//16MB
-std::vector< JOCTET > buffer(0x1000000);
 //size_t WebPEncodeRGB(const uint8_t* rgb, int width, int height, int stride,
 //float quality_factor, uint8_t** output);
 
@@ -67,8 +63,6 @@ using ImagePtr = shared_ptr< char >;
 struct Image {
     ImagePtr image;
     size_t size = 0;
-    bool done = true; //used to determine if service can copying data.
-    bool stop = false;
     Image() = default;
     Image(ImagePtr i, size_t s) : image(i), size(s) {}
     Image(const Image&) = default;
@@ -80,25 +74,14 @@ struct Image {
 Image ReadImage(int width, int height,
                    float quality = 75) {
     static std::vector< char > img;
-    img.resize(3*width*height);
+    img.resize(3 * width * height);
+    glReadBuffer(GL_FRONT);
     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, &img[0]);
-   
-    cimg.save_jpeg_buffer(buffer_output,buf_size,60);
+    uint8_t* out;
     const size_t size = 
         WebPEncodeRGB((uint8_t*) &img[0], width, height, 3 * width, 100, &out);
     return Image(ImagePtr((char*) out, WebpDeleter()), size);
 }
-
-void SendImage(const Image& img) {
-    static bool first = true;
-    if(first) {
-        ofstream os("out.webp", ios::out | ios::binary);
-        if(!os) exit(EXIT_FAILURE);
-        os.write(img.image.get(), img.size);
-        first = false;
-    }
-}
-
 
 //------------------------------------------------------------------------------
 GLuint create_program(const char* vertexSrc,
@@ -162,7 +145,7 @@ void error_callback(int error, const char* description) {
 
 //------------------------------------------------------------------------------
 void key_callback(GLFWwindow* window, int key,
-                         int scancode, int action, int mods) {
+                  int scancode, int action, int mods) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GL_TRUE);
         END = true;
@@ -202,13 +185,10 @@ public:
         InitDataFrame();
     }
     bool Data() const override { 
-        return ctx_->GetServiceData().size > 0 
-               && !ctx_->GetServiceData().stop; }
+        return img_.size > 0;
+    }
     //return data frame and update frame end
     const DataFrame& Get(int requestedChunkLength) {
-        if(df_.frameBegin == df_.bufferBegin) {
-            ctx_->GetServiceData().done = false;
-        }
         if(df_.frameEnd < df_.bufferEnd) {
            //frameBegin *MUST* be updated in the UpdateOutBuffer method
            //because in case the consumed data is less than requestedChunkLength
@@ -216,7 +196,6 @@ public:
                                df_.bufferEnd - df_.frameEnd);
         } else {
            InitDataFrame();
-           ctx_->GetServiceData().done = true;
         }
         return df_;  
     }
@@ -235,18 +214,17 @@ public:
     }
 private:
     void InitDataFrame() {
-        df_.bufferBegin = ctx_->GetServiceData().image.get();
-        df_.bufferEnd = df_.bufferBegin 
-                        + ctx_->GetServiceData().size;
+        img_ = ctx_->GetServiceDataSync();
+        df_.bufferBegin = img_.image.get();
+        df_.bufferEnd = df_.bufferBegin + img_.size;
         df_.frameBegin = df_.bufferBegin;
         df_.frameEnd = df_.frameBegin;
         df_.binary = true;
-        done_ = true;
     }    
 private:    
     DataFrame df_;
     Context* ctx_ = nullptr;
-    bool done_ = true;
+    Image img_;
 };
 
 
@@ -266,14 +244,12 @@ struct UserData {
      : quadvbo(q), texbo(t), mvpID(m), frameID(f), context(c), frame(fr) {}
 };
 
-void Draw(GLFWwindow* window, UserData& d) {
+void Draw(GLFWwindow* window, UserData& d, int width, int height) {
     glClear(GL_COLOR_BUFFER_BIT);
 
     //setup OpenGL matrices: no more matrix stack in OpenGL >= 3 core
     //profile, need to compute modelview and projection matrix manually
     // Clear the screen    
-    int width, height;
-    glfwGetFramebufferSize(window, &width, &height);
     const float ratio = width / float(height);
     const glm::mat4 orthoProj = glm::ortho(-ratio, ratio,
                                            -1.0f,  1.0f,
@@ -298,25 +274,11 @@ void Draw(GLFWwindow* window, UserData& d) {
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
-    if(d.context->GetServiceData().done == true 
-        && !d.context->GetServiceData().stop) {
-        d.context->SetServiceData(ReadImage(width, height));
-        d.context->GetServiceData().done == false;
-    }
     float f = (d.frame % 101) / 100.0f;
-    if(f < 0.f) f = 1.0f - f;
+    if(f < 0.f) f = 1.0f + f;
     glUniform1f(d.frameID, f);
    
 }
-
-void ResizeCallback(GLFWwindow* window, int width, int height) {
-    cout << "resize" << endl;
-    UserData* d = (UserData*) glfwGetWindowUserPointer(window);
-    d->context->GetServiceData().stop == true; 
-    Draw(window, *d);
-    d->context->GetServiceData().stop == false;
-}
-
 
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
@@ -345,27 +307,24 @@ int main(int argc, char** argv) {
     shared_ptr< ImageContext > context(new ImageContext);
 
    
-    auto is = async(launch::async, [&context](WSS& imageStreamer,
-        const bool& e){
+    auto is = async(launch::async, [&context](WSS& imageStreamer){
         imageStreamer.Init(5000, //port
                            nullptr, //SSL certificate path
                            nullptr, //SSL key path
                            context, //context instance,
                            //will be copied internally
                            WSS::Entry< ImageService,
-                                WSS::ASYNC_REP >("image-stream"));
+                                       WSS::ASYNC_REP >("image-stream"));
          //start event loop: one iteration every >= 50ms
         imageStreamer.StartLoop(5, //ms
-                 [&e](){return !e;} //termination condition (exit on false)
+                 [](){return !END;} //termination condition (exit on false)
                                   //checked at each iteration, loops forever
                                   //in this case
                  );
 
-    }, std::ref(imageStreamer), std::cref(END));
+    }, std::ref(imageStreamer));
     
     //==========================================================================
-
-
 
     //WARNING: THIS DOESN'T WORK
     // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -380,19 +339,15 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
-    glfwSetWindowSizeCallback(window, ResizeCallback);    
-
     glfwSetKeyCallback(window, key_callback);
 
     glfwMakeContextCurrent(window);
-
 
     std::cout << "OpenGL version: " << glGetString(GL_VERSION) << std::endl;
     std::cout << "GLSL version: " 
               << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
     std::cout << "Vendor: " << glGetString(GL_VENDOR) << std::endl;
     std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
-
 
 //GEOMETRY
     //geometry: textured quad; the texture color is computed by
@@ -480,11 +435,22 @@ int main(int argc, char** argv) {
     //rendering & simulation loop
     UserData data(quadvbo, texbo, mvpID, frameID, context, 0);
     glfwSetWindowUserPointer(window, &data); 
-    while (!glfwWindowShouldClose(window)) {     
-       Draw(window, data);
-       // glfwSwapBuffers(window);
-       // glfwPollEvents();
+    int width = 0;
+    int height = 0;
+    using namespace std::chrono;
+    const milliseconds T(20);
+    while (!glfwWindowShouldClose(window)) {
+       steady_clock::time_point t = steady_clock::now(); 
+       glfwGetFramebufferSize(window, &width, &height);      
+       Draw(window, data, width, height);
+       glfwSwapBuffers(window);
+       data.context->SetServiceDataSync(ReadImage(width, height));
        ++data.frame;
+       const milliseconds E =
+                        duration_cast< milliseconds >(steady_clock::now() - t);
+       std::this_thread::sleep_for(
+            max(duration_values<milliseconds>::zero(), T - E));
+       glfwPollEvents();
     }
     
 //CLEANUP

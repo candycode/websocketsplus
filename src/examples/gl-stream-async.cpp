@@ -440,15 +440,17 @@ int main(int argc, char** argv) {
     using namespace std::chrono;
     const milliseconds T(20);
     while (!glfwWindowShouldClose(window)) {
-       steady_clock::time_point t = steady_clock::now(); 
-       glfwGetFramebufferSize(window, &width, &height);      
-       Draw(window, data, width, height);
-       glfwSwapBuffers(window);
-       data.context->SetServiceDataSync(ReadImage(width, height));
-       ++data.frame;
-       const milliseconds E = duration_cast< milliseconds >(steady_clock::now() - t);
-       std::this_thread::sleep_for(T - E);
-       glfwPollEvents();
+        steady_clock::time_point t = steady_clock::now(); 
+        glfwGetFramebufferSize(window, &width, &height);      
+        Draw(window, data, width, height);
+        glfwSwapBuffers(window);
+        data.context->SetServiceDataSync(ReadImage(width, height));
+        ++data.frame;
+        const milliseconds E =
+                        duration_cast< milliseconds >(steady_clock::now() - t);
+        std::this_thread::sleep_for(
+            max(duration_values<milliseconds>::zero(), T - E));
+        glfwPollEvents();
     }
     
 //CLEANUP
