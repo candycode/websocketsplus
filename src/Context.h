@@ -21,6 +21,8 @@
 #include <map>
 #include <chrono>
 #include <stdexcept>
+#include <mutex>
+#include <utility>
 
 namespace wsp {
 
@@ -55,7 +57,22 @@ public:
     /// Return constant reference to ServiceData instance: this is what
     /// services use to access data
     const ServiceData& GetServiceData() const { return serviceData_; }
+    /// Return non-const reference to data @todo remove
     ServiceData& GetServiceData() { return serviceData_; }
+    /// Return constant reference to ServiceData instance: this is what
+    /// services use to access data
+    ServiceData GetServiceDataSync() const { 
+        std::lock_guard< std::mutex > guard(mutex_);
+        return ServiceData(serviceData_); 
+    }
+     /// Return constant reference to ServiceData instance: this is what
+    /// services use to access data
+    ServiceData GetServiceDataTrySync() const { 
+        if(mutex_.try_lock()) return ServiceData(serviceData_); 
+        else return ServiceData();
+    }
+    /// Return non-const reference to data @todo remove
+    ServiceData& GetServiceDataSync() { return serviceData_; }
     /// Set service data: this is used by business logic to make data
     /// available to services
     void SetServiceData(const ServiceData& sd) {
@@ -63,6 +80,22 @@ public:
     }
     void SetServiceData(ServiceData&& sd) {
         serviceData_ = sd; //= operator must implement move operation
+    }
+    /// Set service data: this is used by business logic to make data
+    /// available to services
+    void SetServiceDataSync(const ServiceData& sd) {
+        std::lock_guard< std::mutex > guard(mutex_);
+        SetServiceData(sd);
+    }
+    void SetServiceDataSync(ServiceData&& sd) {
+        std::lock_guard< std::mutex > guard(mutex_);
+        SetServiceData(std::move(sd));
+    }
+    void SetServiceDataTrySync(const ServiceData& sd) {
+        if(mutex_.try_lock()) SetServiceData(sd);
+    }
+    void SetServiceDataTrySync(ServiceData&& sd) {
+        if(mutex_.try_lock()) SetServiceData(std::move(sd));
     }
 public:
     /// Return reference to buffer
@@ -152,6 +185,8 @@ private:
     BufferMap buffers_;    
     TimerMap writeTimers_;
     ServiceData serviceData_;
+    ///mutex to synchronize access to shared service resource
+    mutable std::mutex mutex_; 
 };
 
 } //namespace wsp 

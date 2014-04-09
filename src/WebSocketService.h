@@ -486,7 +486,7 @@ private:
     ///libwebsockets' log levels -> text map
     const static std::map< lws_log_levels, std::string > levels_;
     ///log level name -> libwebsockets' log level map
-    const static std::map< std::string, lws_log_levels > levelNames_; 
+    const static std::map< std::string, lws_log_levels > levelNames_;
 };
 
 //------------------------------------------------------------------------------

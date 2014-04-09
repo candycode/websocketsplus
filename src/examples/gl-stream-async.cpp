@@ -61,8 +61,6 @@ using ImagePtr = shared_ptr< char >;
 struct Image {
     ImagePtr image;
     size_t size = 0;
-    bool done = true; //used to determine if service can copying data.
-    bool stop = false;
     Image() = default;
     Image(ImagePtr i, size_t s) : image(i), size(s) {}
     Image(const Image&) = default;
@@ -73,7 +71,9 @@ struct Image {
 
 Image ReadImage(int width, int height,
                    float quality = 75) {
-    std::vector< char > img( 3*width*height);
+    static std::vector< char > img;
+    img.resize(3 * width * height);
+    glReadBuffer(GL_FRONT);
     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, &img[0]);
     uint8_t* out;
     const size_t size = 
@@ -154,7 +154,7 @@ void error_callback(int error, const char* description) {
 
 //------------------------------------------------------------------------------
 void key_callback(GLFWwindow* window, int key,
-                         int scancode, int action, int mods) {
+                  int scancode, int action, int mods) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GL_TRUE);
         END = true;
@@ -194,13 +194,10 @@ public:
         InitDataFrame();
     }
     bool Data() const override { 
-        return ctx_->GetServiceData().size > 0 
-               && !ctx_->GetServiceData().stop; }
+        return img_.size > 0;
+    }
     //return data frame and update frame end
     const DataFrame& Get(int requestedChunkLength) {
-        if(df_.frameBegin == df_.bufferBegin) {
-            ctx_->GetServiceData().done = false;
-        }
         if(df_.frameEnd < df_.bufferEnd) {
            //frameBegin *MUST* be updated in the UpdateOutBuffer method
            //because in case the consumed data is less than requestedChunkLength
@@ -208,7 +205,6 @@ public:
                                df_.bufferEnd - df_.frameEnd);
         } else {
            InitDataFrame();
-           ctx_->GetServiceData().done = true;
         }
         return df_;  
     }
@@ -223,22 +219,21 @@ public:
     std::chrono::duration< double > 
     MinDelayBetweenWrites() const {
         //use 0.0
-        return std::chrono::duration< double >(0.001);
+        return std::chrono::duration< double >(0.016);
     }
 private:
     void InitDataFrame() {
-        df_.bufferBegin = ctx_->GetServiceData().image.get();
-        df_.bufferEnd = df_.bufferBegin 
-                        + ctx_->GetServiceData().size;
+        img_ = ctx_->GetServiceDataSync();
+        df_.bufferBegin = img_.image.get();
+        df_.bufferEnd = df_.bufferBegin + img_.size;
         df_.frameBegin = df_.bufferBegin;
         df_.frameEnd = df_.frameBegin;
         df_.binary = true;
-        done_ = true;
     }    
 private:    
     DataFrame df_;
     Context* ctx_ = nullptr;
-    bool done_ = true;
+    Image img_;
 };
 
 
@@ -294,15 +289,6 @@ void Draw(GLFWwindow* window, UserData& d, int width, int height) {
    
 }
 
-void CopyData(shared_ptr< ImageContext >& context, int width, int height) {
-    if(context->GetServiceData().done == true 
-       && !context->GetServiceData().stop) {
-       context->SetServiceData(ReadImage(width, height));
-       context->GetServiceData().done == false;
-    }
-}
-
-
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
 //USER INPUT
@@ -330,27 +316,24 @@ int main(int argc, char** argv) {
     shared_ptr< ImageContext > context(new ImageContext);
 
    
-    auto is = async(launch::async, [&context](WSS& imageStreamer,
-        const bool& e){
+    auto is = async(launch::async, [&context](WSS& imageStreamer){
         imageStreamer.Init(5000, //port
                            nullptr, //SSL certificate path
                            nullptr, //SSL key path
                            context, //context instance,
                            //will be copied internally
                            WSS::Entry< ImageService,
-                                WSS::ASYNC_REP >("image-stream"));
+                                       WSS::ASYNC_REP >("image-stream"));
          //start event loop: one iteration every >= 50ms
         imageStreamer.StartLoop(5, //ms
-                 [&e](){return !e;} //termination condition (exit on false)
+                 [](){return !END;} //termination condition (exit on false)
                                   //checked at each iteration, loops forever
                                   //in this case
                  );
 
-    }, std::ref(imageStreamer), std::cref(END));
+    }, std::ref(imageStreamer));
     
     //==========================================================================
-
-
 
     //WARNING: THIS DOESN'T WORK
     // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -466,9 +449,9 @@ int main(int argc, char** argv) {
     while (!glfwWindowShouldClose(window)) {
        glfwGetFramebufferSize(window, &width, &height);      
        Draw(window, data, width, height);
-       CopyData(data.context, width, height);
-       // glfwSwapBuffers(window);
-       // glfwPollEvents();
+       glfwSwapBuffers(window);
+       data.context->SetServiceDataSync(ReadImage(width, height));
+       glfwPollEvents();
        ++data.frame;
     }
     
