@@ -15,6 +15,8 @@
 #include <thread>
 #include <future>
 #include <memory>
+#include <chrono>
+#include <thread>
 
 #include <GLFW/glfw3.h>
 
@@ -80,17 +82,6 @@ Image ReadImage(int width, int height,
         WebPEncodeRGB((uint8_t*) &img[0], width, height, 3 * width, 100, &out);
     return Image(ImagePtr((char*) out, WebpDeleter()), size);
 }
-
-void SendImage(const Image& img) {
-    static bool first = true;
-    if(first) {
-        ofstream os("out.webp", ios::out | ios::binary);
-        if(!os) exit(EXIT_FAILURE);
-        os.write(img.image.get(), img.size);
-        first = false;
-    }
-}
-
 
 //------------------------------------------------------------------------------
 GLuint create_program(const char* vertexSrc,
@@ -219,7 +210,7 @@ public:
     std::chrono::duration< double > 
     MinDelayBetweenWrites() const {
         //use 0.0
-        return std::chrono::duration< double >(0.016);
+        return std::chrono::duration< double >(0.001);
     }
 private:
     void InitDataFrame() {
@@ -446,13 +437,18 @@ int main(int argc, char** argv) {
     glfwSetWindowUserPointer(window, &data); 
     int width = 0;
     int height = 0;
+    using namespace std::chrono;
+    const milliseconds T(20);
     while (!glfwWindowShouldClose(window)) {
+       steady_clock::time_point t = steady_clock::now(); 
        glfwGetFramebufferSize(window, &width, &height);      
        Draw(window, data, width, height);
        glfwSwapBuffers(window);
        data.context->SetServiceDataSync(ReadImage(width, height));
-       glfwPollEvents();
        ++data.frame;
+       const milliseconds E = duration_cast< milliseconds >(steady_clock::now() - t);
+       std::this_thread::sleep_for(T - E);
+       glfwPollEvents();
     }
     
 //CLEANUP

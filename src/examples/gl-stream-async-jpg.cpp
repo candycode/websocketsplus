@@ -15,6 +15,8 @@
 #include <thread>
 #include <future>
 #include <memory>
+#include <chrono>
+#include <thread>
 
 #include <GLFW/glfw3.h>
 
@@ -47,7 +49,7 @@ const GLenum GL_REAL_T = GL_FLOAT;
 #endif                      
 
 
-using namespace cimg_library;
+
 //16MB
 std::vector< JOCTET > buffer(0x1000000);
 //size_t WebPEncodeRGB(const uint8_t* rgb, int width, int height, int stride,
@@ -77,10 +79,11 @@ struct Image {
 
 Image ReadImage(int width, int height,
                    float quality = 75) {
-    std::vector< char > img( 3*width*height);
+    static std::vector< char > img;
+    img.resize(3*width*height);
     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, &img[0]);
    
-   uint8_t* out;
+    cimg.save_jpeg_buffer(buffer_output,buf_size,60);
     const size_t size = 
         WebPEncodeRGB((uint8_t*) &img[0], width, height, 3 * width, 100, &out);
     return Image(ImagePtr((char*) out, WebpDeleter()), size);
