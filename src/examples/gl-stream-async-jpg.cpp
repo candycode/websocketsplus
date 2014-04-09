@@ -4,7 +4,10 @@
 //Requires GLFW and GLM, to deal with the missing support for matrix stack
 //in OpenGL >= 3.3
 
-//g++ -std=c++11  ../src/examples/gl-stream-async.cpp -I /usr/local/glfw/include -DGL_GLEXT_PROTOTYPES -L /usr/local/glfw/lib -lglfw -I /usr/local/glm/include -lGL -lwebp -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread
+//g++ -std=c++11  ../src/examples/gl-stream-async-jpg.cpp -I /usr/local/glfw/include -DGL_GLEXT_PROTOTYPES -L /usr/local/glfw/lib -lglfw -I /usr/local/glm/include -lGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib64  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread
+//NOTE: turbo JPEG is > one order of magnitude faster than webp
+
+//CHECK AFTER MAIN FOR ADDITIONAL INFO
 
 
 #include <cstdlib>
@@ -25,7 +28,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <webp/encode.h>
+#include <turbojpeg.h>
 
 #include "../WebSocketService.h"
 #include "../Context.h"
@@ -48,39 +51,58 @@ const GLenum GL_REAL_T = GL_FLOAT;
 #define gle 
 #endif                      
 
-//size_t WebPEncodeRGB(const uint8_t* rgb, int width, int height, int stride,
-//float quality_factor, uint8_t** output);
-
 //------------------------------------------------------------------------------
-struct WebpDeleter {
+struct TJDeleter {
     void operator()(char* p) const {
-        free(p);
+        tjFree((unsigned char*) p);
     }
 };
 
 using ImagePtr = shared_ptr< char >;
 
 struct Image {
+    int id = 0;
     ImagePtr image;
     size_t size = 0;
     Image() = default;
-    Image(ImagePtr i, size_t s) : image(i), size(s) {}
+    Image(ImagePtr i, size_t s, int c) : image(i), size(s), id(c) {}
     Image(const Image&) = default;
     Image(Image&&) = default;
     Image& operator=(const Image&) = default;
     Image& operator=(Image&&) = default;
 };
 
-Image ReadImage(int width, int height,
-                   float quality = 75) {
+Image ReadImage(tjhandle tj, int width, int height, int quality = 75) {
     static std::vector< char > img;
+    static int count = 0;
     img.resize(3 * width * height);
     glReadBuffer(GL_FRONT);
+#ifdef TIME_READPIXEL    
+    using namespace std::chrono;
+    steady_clock::time_point t = steady_clock::now(); 
+#endif    
     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, &img[0]);
-    uint8_t* out;
-    const size_t size = 
-        WebPEncodeRGB((uint8_t*) &img[0], width, height, 3 * width, 100, &out);
-    return Image(ImagePtr((char*) out, WebpDeleter()), size);
+#ifdef TIME_READPIXEL    
+    const milliseconds E =
+                        duration_cast< milliseconds >(steady_clock::now() - t);
+    cout << E.count() << ' '; //doesn't flush, prints after closing window                    
+#endif    
+
+    char* out = nullptr; 
+    unsigned long size = 0;
+    tjCompress2(tj,
+        (unsigned char*) &img[0],
+        width,
+        3 * width,
+        height,
+        TJPF_RGB,
+        (unsigned char **) &out,
+        &size,
+        TJSAMP_444,
+        quality,
+        0); 
+       
+    return Image(ImagePtr((char*) out, TJDeleter()), size, count++);
 }
 
 //------------------------------------------------------------------------------
@@ -185,7 +207,11 @@ public:
         InitDataFrame();
     }
     bool Data() const override { 
-        return img_.size > 0;
+        if(img_.size > 0) return true;
+        else {
+            InitDataFrame();
+            return false;
+        }
     }
     //return data frame and update frame end
     const DataFrame& Get(int requestedChunkLength) {
@@ -213,7 +239,16 @@ public:
         return std::chrono::duration< double >(0.001);
     }
 private:
-    void InitDataFrame() {
+    void InitDataFrame() const {
+        if(ctx_->GetServiceData().id == img_.id) {
+            if(dontSendIfEqual_) {
+                //do not ever try to delete the memory in the smart pointer:
+                //it is allocated in the main thread and deallocated when
+                //the smart pointer counter reaches zero
+                img_.size = 0;
+                return;
+            }
+        }
         img_ = ctx_->GetServiceDataSync();
         df_.bufferBegin = img_.image.get();
         df_.bufferEnd = df_.bufferBegin + img_.size;
@@ -222,9 +257,10 @@ private:
         df_.binary = true;
     }    
 private:    
-    DataFrame df_;
-    Context* ctx_ = nullptr;
-    Image img_;
+    mutable DataFrame df_;
+    mutable Context* ctx_ = nullptr;
+    mutable Image img_;
+    bool dontSendIfEqual_ = true;
 };
 
 
@@ -298,7 +334,7 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
-
+    tjhandle tj = tjInitCompress();
     //==========================================================================
     using WSS = wsp::WebSocketService;
     WSS imageStreamer;
@@ -440,17 +476,20 @@ int main(int argc, char** argv) {
     using namespace std::chrono;
     const milliseconds T(20);
     while (!glfwWindowShouldClose(window)) {
-       steady_clock::time_point t = steady_clock::now(); 
-       glfwGetFramebufferSize(window, &width, &height);      
-       Draw(window, data, width, height);
-       glfwSwapBuffers(window);
-       data.context->SetServiceDataSync(ReadImage(width, height));
-       ++data.frame;
-       const milliseconds E =
+        steady_clock::time_point t = steady_clock::now(); 
+        glfwGetFramebufferSize(window, &width, &height);      
+        Draw(window, data, width, height);
+        glfwSwapBuffers(window);
+        data.context->SetServiceDataSync(ReadImage(tj, width, height, 100));
+        ++data.frame;
+        const milliseconds E =
                         duration_cast< milliseconds >(steady_clock::now() - t);
-       std::this_thread::sleep_for(
+#ifdef TIME_RENDER_STEP
+        cout << E.count() << ' ';
+#endif                                
+        std::this_thread::sleep_for(
             max(duration_values<milliseconds>::zero(), T - E));
-       glfwPollEvents();
+        glfwPollEvents();
     }
     
 //CLEANUP
@@ -461,6 +500,34 @@ int main(int argc, char** argv) {
 
     glfwTerminate();
     is.wait();
+    tjDestroy(tj);
     exit(EXIT_SUCCESS);
     return 0;
 }
+
+//glReadPixels lasts 10 to 20ms, use PBO or FBO instead
+//
+// Pixel Buffer Object (PBO)
+//
+// glGenBuffers(1, &pbo_id);
+// glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id);
+// glBufferData(GL_PIXEL_PACK_BUFFER, pbo_size, 0, GL_DYNAMIC_READ);
+// glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+//
+// According to the reference of glReadPixels:
+//
+// If a non-zero named buffer object is bound to the GL_PIXEL_PACK_BUFFER target
+// (see glBindBuffer) while a block of pixels is requested, data is treated as a
+// byte offset into the buffer object’s data store rather than a pointer to
+//client memory.
+//
+// glReadBuffer(GL_COLOR_ATTACHMENT0);
+// glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id);
+// glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+// GLubyte *ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, pbo_size,
+//                                 GL_MAP_READ_BIT);
+// memcpy(pixels, ptr, pbo_size);
+// glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+// glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+// In a real project, we may consider using double or triple PBOs to improve the
+// performance.

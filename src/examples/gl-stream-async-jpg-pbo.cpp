@@ -4,7 +4,8 @@
 //Requires GLFW and GLM, to deal with the missing support for matrix stack
 //in OpenGL >= 3.3
 
-//g++ -std=c++11  ../src/examples/gl-stream-async.cpp -I /usr/local/glfw/include -DGL_GLEXT_PROTOTYPES -L /usr/local/glfw/lib -lglfw -I /usr/local/glm/include -lGL -lwebp -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread
+//g++ -std=c++11  ../src/examples/gl-stream-async-jpg.cpp -I /usr/local/glfw/include -DGL_GLEXT_PROTOTYPES -L /usr/local/glfw/lib -lglfw -I /usr/local/glm/include -lGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib64  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread
+//NOTE: turbo JPEG is > one order of magnitude faster than webp
 
 //CHECK AFTER MAIN FOR ADDITIONAL INFO
 
@@ -27,7 +28,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <webp/encode.h>
+#include <turbojpeg.h>
 
 #include "../WebSocketService.h"
 #include "../Context.h"
@@ -50,13 +51,10 @@ const GLenum GL_REAL_T = GL_FLOAT;
 #define gle 
 #endif                      
 
-//size_t WebPEncodeRGB(const uint8_t* rgb, int width, int height, int stride,
-//float quality_factor, uint8_t** output);
-
 //------------------------------------------------------------------------------
-struct WebpDeleter {
+struct TJDeleter {
     void operator()(char* p) const {
-        free(p);
+        tjFree((unsigned char*) p);
     }
 };
 
@@ -74,27 +72,41 @@ struct Image {
     Image& operator=(Image&&) = default;
 };
 
-Image ReadImage(int width, int height,
-                   float quality = 100) {
+Image ReadImage(tjhandle tj, int width, int height, GLuint pbo, int quality = 75) {
     static std::vector< char > img;
     static int count = 0;
-    img.resize(3 * width * height);
-    glReadBuffer(GL_FRONT);
+    //img.resize(3 * width * height);
+    glReadBuffer(GL_BACK);
 #ifdef TIME_READPIXEL    
     using namespace std::chrono;
     steady_clock::time_point t = steady_clock::now(); 
 #endif    
-    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, &img[0]);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo);
+    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, 0);
+    char* glout = (char* ) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+
+    
 #ifdef TIME_READPIXEL    
     const milliseconds E =
                         duration_cast< milliseconds >(steady_clock::now() - t);
     cout << E.count() << ' '; //doesn't flush, prints after closing window                    
 #endif    
-    uint8_t* out;
-    const size_t size = 
-        WebPEncodeRGB((uint8_t*) &img[0], width, height, 3 * width,
-                       quality, &out);               
-    return Image(ImagePtr((char*) out, WebpDeleter()), size, count++);
+    char* out = nullptr;
+    unsigned long size = 0;
+    tjCompress2(tj,
+        (unsigned char*) glout,
+        width,
+        3 * width,
+        height,
+        TJPF_RGB,
+        (unsigned char **) &out,
+        &size,
+        TJSAMP_444,
+        quality,
+        0); 
+    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);   
+    return Image(ImagePtr((char*) out, TJDeleter()), size, count++);
 }
 
 //------------------------------------------------------------------------------
@@ -304,8 +316,7 @@ void Draw(GLFWwindow* window, UserData& d, int width, int height) {
     glDisableVertexAttribArray(1);
     float f = (d.frame % 101) / 100.0f;
     if(f < 0.f) f = 1.0f + f;
-    glUniform1f(d.frameID, f);
-   
+    glUniform1f(d.frameID, f);  
 }
 
 //------------------------------------------------------------------------------
@@ -326,7 +337,7 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
-
+    tjhandle tj = tjInitCompress();
     //==========================================================================
     using WSS = wsp::WebSocketService;
     WSS imageStreamer;
@@ -359,7 +370,7 @@ int main(int argc, char** argv) {
     // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(1024, 768,
+    GLFWwindow* window = glfwCreateWindow(2560, 1440,
                                           "image streaming", NULL, NULL);
     if (!window) {
         std::cerr << "ERROR - glfwCreateWindow" << std::endl;
@@ -451,10 +462,18 @@ int main(int argc, char** argv) {
     GLint frameID = glGetUniformLocation(glprogram, "frame");
 
     
-    //only need texture unit 0
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glUniform1i(textureID, 0);
+    // //only need texture unit 0
+    // glActiveTexture(GL_TEXTURE0);
+    // glBindTexture(GL_TEXTURE_2D, tex);
+    // glUniform1i(textureID, 0);
+
+    //=========================================================================
+    GLuint pboId;
+    glGenBuffers(1, &pboId);
+  
+    //=========================================================================
+
+
 
     //beckground color        
     glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
@@ -469,10 +488,15 @@ int main(int argc, char** argv) {
     const milliseconds T(20);
     while (!glfwWindowShouldClose(window)) {
         steady_clock::time_point t = steady_clock::now(); 
-        glfwGetFramebufferSize(window, &width, &height);      
+        glfwGetFramebufferSize(window, &width, &height);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, pboId);
+        glBufferData(GL_PIXEL_PACK_BUFFER, width * height * 3, 0,
+                     GL_DYNAMIC_READ);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);      
         Draw(window, data, width, height);
-        glfwSwapBuffers(window);
-        data.context->SetServiceDataSync(ReadImage(width, height));
+        //glfwSwapBuffers(window);
+        data.context->SetServiceDataSync(ReadImage(tj, width, height, pboId,
+                                                   70));
         ++data.frame;
         const milliseconds E =
                         duration_cast< milliseconds >(steady_clock::now() - t);
@@ -488,10 +512,12 @@ int main(int argc, char** argv) {
     glDeleteBuffers(1, &quadvbo);
     glDeleteBuffers(1, &texbo);
     glDeleteTextures(1, &tex);
+    glDeleteBuffers(1, &pboId);
     glfwDestroyWindow(window);
 
     glfwTerminate();
     is.wait();
+    tjDestroy(tj);
     exit(EXIT_SUCCESS);
     return 0;
 }
@@ -512,7 +538,7 @@ int main(int argc, char** argv) {
 // byte offset into the buffer object’s data store rather than a pointer to
 //client memory.
 //
-// glReadBuffer(GL_COLOR_ATTACHMENT0);
+// glReadBuffer(GL_BACK);
 // glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo_id);
 // glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 // GLubyte *ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, pbo_size,
@@ -522,3 +548,9 @@ int main(int argc, char** argv) {
 // glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 // In a real project, we may consider using double or triple PBOs to improve the
 // performance.
+
+//further optimization:
+//Create renderbuffer + FBO and perform all the rendering to 
+//GL_COLOR_ATTACHMENT0`then
+// glReadBuffer(GL_COLOR_ATTACHMENT0)
+//...

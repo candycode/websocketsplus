@@ -58,7 +58,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                  bytes.text(e.data.byteLength);
                  //arrayBufferView = e.data;
                  //blob = new Blob( [e.data], { type: "image/jpeg" } );
-                 blob = new Blob( [e.data], { type: "image/webp" } );
+                 blob = new Blob( [e.data], { type: "image/jpeg" } );
                  imageUrl = urlCreator.createObjectURL( blob );
                  img.src = imageUrl;
               };
