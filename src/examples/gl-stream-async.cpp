@@ -258,14 +258,12 @@ struct UserData {
      : quadvbo(q), texbo(t), mvpID(m), frameID(f), context(c), frame(fr) {}
 };
 
-void Draw(GLFWwindow* window, UserData& d) {
+void Draw(GLFWwindow* window, UserData& d, int width, int height) {
     glClear(GL_COLOR_BUFFER_BIT);
 
     //setup OpenGL matrices: no more matrix stack in OpenGL >= 3 core
     //profile, need to compute modelview and projection matrix manually
     // Clear the screen    
-    int width, height;
-    glfwGetFramebufferSize(window, &width, &height);
     const float ratio = width / float(height);
     const glm::mat4 orthoProj = glm::ortho(-ratio, ratio,
                                            -1.0f,  1.0f,
@@ -290,23 +288,18 @@ void Draw(GLFWwindow* window, UserData& d) {
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
-    if(d.context->GetServiceData().done == true 
-        && !d.context->GetServiceData().stop) {
-        d.context->SetServiceData(ReadImage(width, height));
-        d.context->GetServiceData().done == false;
-    }
     float f = (d.frame % 101) / 100.0f;
-    if(f < 0.f) f = 1.0f - f;
+    if(f < 0.f) f = 1.0f + f;
     glUniform1f(d.frameID, f);
    
 }
 
-void ResizeCallback(GLFWwindow* window, int width, int height) {
-    cout << "resize" << endl;
-    UserData* d = (UserData*) glfwGetWindowUserPointer(window);
-    d->context->GetServiceData().stop == true; 
-    Draw(window, *d);
-    d->context->GetServiceData().stop == false;
+void CopyData(shared_ptr< ImageContext >& context, int width, int height) {
+    if(context->GetServiceData().done == true 
+       && !context->GetServiceData().stop) {
+       context->SetServiceData(ReadImage(width, height));
+       context->GetServiceData().done == false;
+    }
 }
 
 
@@ -372,19 +365,15 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
-    glfwSetWindowSizeCallback(window, ResizeCallback);    
-
     glfwSetKeyCallback(window, key_callback);
 
     glfwMakeContextCurrent(window);
-
 
     std::cout << "OpenGL version: " << glGetString(GL_VERSION) << std::endl;
     std::cout << "GLSL version: " 
               << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
     std::cout << "Vendor: " << glGetString(GL_VENDOR) << std::endl;
     std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
-
 
 //GEOMETRY
     //geometry: textured quad; the texture color is computed by
@@ -472,8 +461,12 @@ int main(int argc, char** argv) {
     //rendering & simulation loop
     UserData data(quadvbo, texbo, mvpID, frameID, context, 0);
     glfwSetWindowUserPointer(window, &data); 
-    while (!glfwWindowShouldClose(window)) {     
-       Draw(window, data);
+    int width = 0;
+    int height = 0;
+    while (!glfwWindowShouldClose(window)) {
+       glfwGetFramebufferSize(window, &width, &height);      
+       Draw(window, data, width, height);
+       CopyData(data.context, width, height);
        // glfwSwapBuffers(window);
        // glfwPollEvents();
        ++data.frame;
