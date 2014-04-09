@@ -554,3 +554,30 @@ int main(int argc, char** argv) {
 //GL_COLOR_ATTACHMENT0`then
 // glReadBuffer(GL_COLOR_ATTACHMENT0)
 //...
+
+//Also check http://www.songho.ca/opengl/gl_pbo.html#pack
+// "index" is used to read pixels from framebuffer to a PBO
+// "nextIndex" is used to update pixels in the other PBO
+// index = (index + 1) % 2;
+// nextIndex = (index + 1) % 2;
+
+// // set the target framebuffer to read
+// glReadBuffer(GL_FRONT);
+
+// // read pixels from framebuffer to PBO
+// // glReadPixels() should return immediately.
+// glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pboIds[index]);
+// glReadPixels(0, 0, WIDTH, HEIGHT, GL_BGRA, GL_UNSIGNED_BYTE, 0);
+
+// // map the PBO to process its data by CPU
+// glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pboIds[nextIndex]);
+// GLubyte* ptr = (GLubyte*)glMapBufferARB(GL_PIXEL_PACK_BUFFER_ARB,
+//                                         GL_READ_ONLY_ARB);
+// if(ptr)
+// {
+//     processPixels(ptr, ...);
+//     glUnmapBufferARB(GL_PIXEL_PACK_BUFFER_ARB);
+// }
+
+// // back to conventional pixel operation
+// glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, 0);
