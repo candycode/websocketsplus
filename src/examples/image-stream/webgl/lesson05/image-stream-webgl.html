@@ -66,7 +66,7 @@
         websocket.onmessage = function (e) {
             if(imageUrl)
                 urlCreator.revokeObjectURL(imageUrl);
-            blob = new Blob( [e.data], { type: "image/webp" } );
+            blob = new Blob( [e.data], { type: "image/jpeg" } );
             imageUrl = urlCreator.createObjectURL( blob );
             wsTexture.image.src = imageUrl;
         }
@@ -368,7 +368,7 @@
             tick();
         }
 
-        gl.clearColor(0.0, 0.0, 0.0, 0.0); //alpha=0 makes the background
+        gl.clearColor(0.0, 0.0, 0.0, 1.0); //alpha=0 makes the background
                                            //transparent
         gl.enable(gl.DEPTH_TEST);
         initWebSockets();
@@ -387,7 +387,7 @@
     
 
     <canvas id="lesson05-canvas" style="overflow: scroll; border: none; position: absolute; top:0; left:0; z-index: -1;"
-    width="1920" height="1080"></canvas>
+    width="1280" height="720"></canvas>
     <div style="color: red; font-size: 100%; position: fixed">
        <div>Frame/s: <span id="fps"></span></div>
        

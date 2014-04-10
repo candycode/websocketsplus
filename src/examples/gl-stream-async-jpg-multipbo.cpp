@@ -20,6 +20,7 @@
 #include <memory>
 #include <chrono>
 #include <thread>
+#include <map>
 
 #include <GLFW/glfw3.h>
 
@@ -73,12 +74,11 @@ struct Image {
 };
 
 Image ReadImage(tjhandle tj, int width, int height,
-                GLuint* pbo, int quality = 75) {
+                GLuint* pbo, int quality = 75, int cs = TJSAMP_444) {
     static std::vector< char > img;
     static int count = 0;
     static int index = 0;
     static int nextIndex = 0;
-    //img.resize(3 * width * height);
     glReadBuffer(GL_BACK);
 #ifdef TIME_READPIXEL    
     using namespace std::chrono;
@@ -107,12 +107,14 @@ Image ReadImage(tjhandle tj, int width, int height,
     tjCompress2(tj,
         (unsigned char*) glout,
         width,
-        3 * width,
+        tjPixelSize[TJPF_RGB] * width,
         height,
         TJPF_RGB,
         (unsigned char **) &out,
         &size,
-        TJSAMP_444,
+        TJSAMP_444, //444=best quality,
+                    //420=fast and still unnoticeable but MIGHT NOT WORK
+                    //IN SOME BROWSERS
         quality,
         0); 
     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
@@ -198,7 +200,7 @@ const char fragmentShaderSrc[] =
     "uniform sampler2D cltexture;\n"
     "uniform float frame;\n"
     "void main() {\n"
-    "  outColor = frame * 0.5 *(p + vec4(1)).rgb;//texture(cltexture, UV).rrr;\n"
+    "  outColor = frame * 0.5 *(p + vec4(1)).rgb;\n"
     "}";
 const char vertexShaderSrc[] =
     "#version 330 core\n"
@@ -336,13 +338,19 @@ void Draw(GLFWwindow* window, UserData& d, int width, int height) {
 //------------------------------------------------------------------------------
 int main(int argc, char** argv) {
 //USER INPUT
-    if(argc < 2) {
+    if(argc < 3) {
       std::cout << "usage: " << argv[0]
-                << " <size>"
+                << " <size> <quality>"
                 << std::endl; 
       exit(EXIT_FAILURE);          
     }
-    const int SIZE = atoi(argv[1]);
+    map< string, int > cs = {{"444", TJSAMP_444},
+                             {"440", TJSAMP_440},
+                             {"422", TJSAMP_422},
+                             {"420", TJSAMP_420}};
+    const int SIZE = stoi(argv[1]);
+    const int QUALITY = stoi(argv[2]);
+    const int CHROMINANCE_SAMPLING = argc < 4 ? cs[argv[3]] : TJSAMP_444;
 //GRAPHICS SETUP        
     glfwSetErrorCallback(error_callback);
 
@@ -384,7 +392,7 @@ int main(int argc, char** argv) {
     // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(2560, 1440,
+    GLFWwindow* window = glfwCreateWindow((16 * SIZE) / 9, SIZE,
                                           "image streaming", NULL, NULL);
     if (!window) {
         std::cerr << "ERROR - glfwCreateWindow" << std::endl;
@@ -512,7 +520,8 @@ int main(int argc, char** argv) {
         Draw(window, data, width, height);
         //glfwSwapBuffers(window);
         data.context->SetServiceDataSync(ReadImage(tj, width, height, pboId,
-                                                   70));
+                                                   QUALITY,
+                                                   CHROMINANCE_SAMPLING));
         ++data.frame;
         const milliseconds E =
                         duration_cast< milliseconds >(steady_clock::now() - t);
