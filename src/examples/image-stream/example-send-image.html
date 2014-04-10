@@ -28,12 +28,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               window.WebSocket = window.WebSocket || window.MozWebSocket;
               var out = $("[name='output']");
               var bytes = $("[name='bytes']");
+              var imageWidth  = $("[name='width']");
+              var imageHeight  = $("[name='height']");
+              var m  = $("[name='min']");
+              var M  = $("[name='max']");
+              var D  = $("[name='delta']");
               var img = document.querySelector( "#photo" );
               var blob = new Blob( [], { type: "image/jpeg" } );
               var urlCreator = window.URL || window.webkitURL;
               var imageUrl;
               var b = document.querySelector( "body" );
-
+              var W, H;
+              var minSize = 0x100000000;
+              var maxSize = 0; 
+           
               var websocket = new WebSocket('ws://127.0.0.1:5000',
                                             'image-stream');
               websocket.binaryType = "arraybuffer";
@@ -48,6 +56,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var start = performance.now();
               var elapsed = 0;
               var frames = 0;
+              img.onload = function() {
+                  W = this.width;
+                  H = this.height;
+              }
+              var size;
+              var dSize;
               websocket.onmessage = function (e) {
                 if(imageUrl)
                   urlCreator.revokeObjectURL(imageUrl);
@@ -55,7 +69,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                  elapsed = performance.now() - start;
                  //out.text(e.data.byteLength);
                  out.text((1000 * frames / elapsed).toFixed(0));
-                 bytes.text(e.data.byteLength);
+                 size = e.data.byteLength;
+                 bytes.text(size);
+                 if(size < minSize) minSize = size;
+                 if(size > maxSize) maxSize = size;
+                 dSize = maxSize - minSize;
+                 m.text(minSize);
+                 M.text(maxSize);
+                 D.text(dSize);
+                 imageWidth.text(W);
+                 imageHeight.text(H);
                  //arrayBufferView = e.data;
                  //blob = new Blob( [e.data], { type: "image/jpeg" } );
                  blob = new Blob( [e.data], { type: "image/jpeg" } );
@@ -70,9 +93,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
          <h1>WebSockets stream test</h1>
          <div>Frame/s: <span name="output"></span></div>
          <div>Size: <span name="bytes"></span> bytes</div>
+         <div>Width: <span name="width"></span></div>
+         <div>Height: <span name="height"></span></div>
+         <div>Min size: <span name="min"></span></div>
+         <div>Max size: <span name="max"></span></div>
+         <div>Max - min size: <span name="delta"></span></div>
        </div>
 <!--        <div><img id="photo" style="width: 960px; height: 540px; display: block; margin-left: auto; margin-right: auto"/></div> -->
-       <div><img id="photo" style="width: 2880px; height: 1800px; z-index: -1;position: absolute; top:0;left:0; overflow: scroll"/></div> 
+<!--width: 2880px; height: 1800px; -->
+       <div><img id="photo" style="z-index: -1;position: absolute; top:0;left:0; overflow: scroll"/></div> 
    </body>
 </html>
 

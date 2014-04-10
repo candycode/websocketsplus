@@ -73,9 +73,11 @@ struct Image {
     Image& operator=(Image&&) = default;
 };
 
+bool resizing = false;
+
 Image ReadImage(tjhandle tj, int width, int height,
                 GLuint* pbo, int quality = 75, int cs = TJSAMP_444) {
-    static std::vector< char > img;
+    //cout << width << ' ' << height << endl;
     static int count = 0;
     static int index = 0;
     static int nextIndex = 0;
@@ -100,7 +102,7 @@ Image ReadImage(tjhandle tj, int width, int height,
 #ifdef TIME_READPIXEL    
     const milliseconds E =
                         duration_cast< milliseconds >(steady_clock::now() - t);
-    cout << E.count() << ' '; //doesn't flush, prints after closing window                    
+    cout << E.count() << ' '; //doesn't flush                   
 #endif    
     char* out = nullptr;
     unsigned long size = 0;
@@ -112,7 +114,7 @@ Image ReadImage(tjhandle tj, int width, int height,
         TJPF_RGB,
         (unsigned char **) &out,
         &size,
-        TJSAMP_444, //444=best quality,
+        cs, //444=best quality,
                     //420=fast and still unnoticeable but MIGHT NOT WORK
                     //IN SOME BROWSERS
         quality,
@@ -497,7 +499,7 @@ int main(int argc, char** argv) {
 
 
     //background color        
-    glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
+    glClearColor(0.0f, 0.0f, 0.4f, 1.0f);
 
 //RENDER LOOP    
     //rendering & simulation loop
@@ -508,6 +510,7 @@ int main(int argc, char** argv) {
     using namespace std::chrono;
     const milliseconds T(20);
     while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
         steady_clock::time_point t = steady_clock::now(); 
         glfwGetFramebufferSize(window, &width, &height);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, pboId[0]);
@@ -529,8 +532,8 @@ int main(int argc, char** argv) {
         cout << E.count() << ' ';
 #endif                                
         std::this_thread::sleep_for(
-            max(duration_values<milliseconds>::zero(), T - E));
-        glfwPollEvents();
+            max(duration_values< milliseconds >::zero(), T - E));
+        
     }
     
 //CLEANUP
