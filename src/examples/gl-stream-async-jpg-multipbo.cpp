@@ -13,13 +13,11 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
-#include <memory>
 #include <fstream>
 #include <thread>
 #include <future>
 #include <memory>
 #include <chrono>
-#include <thread>
 #include <map>
 
 #include <GLFW/glfw3.h>
