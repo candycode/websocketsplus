@@ -55,6 +55,7 @@
 #include <memory>
 #include <chrono>
 #include <map>
+#include <deque>
 
 #include <turbojpeg.h>
 
@@ -84,6 +85,25 @@ struct TJDeleter {
 };
 
 using ImagePtr = shared_ptr< char >;
+
+template < typename T >
+class SyncQueue {
+public:    
+    T Get() {
+        const T d(move(q_.front()));
+        q_.pop_front();
+        return d; 
+    }
+    void Put(T&& d) {
+        q_.push_back(d);
+    }
+    bool Empty() const { return q_.empty(); }
+private:    
+    deque< T > q_;
+
+};
+
+SyncQueue< vector< char > > msgQueue;
 
 struct Image {
     int id = 0;
@@ -188,7 +208,13 @@ public:
     }
     //streaming: always in send mode, no receive
     bool Sending() const override { return true; }
-    void Put(void* p, size_t len, bool done) override {}
+    void Put(void* p, size_t len, bool done) override {
+        in_.insert(in_.end(), (char*) p, (char*) p + len);
+        if(done) {
+            msgQueue.Put(move(in_));
+            in_.resize(0);
+        }
+    }
     std::chrono::duration< double > 
     MinDelayBetweenWrites() const {
         //use 0.0
@@ -217,12 +243,49 @@ private:
     mutable Context* ctx_ = nullptr;
     mutable Image img_;
     bool dontSendIfEqual_ = true;
+    vector< char > in_;
 };
 
 //==============================================================================
 
 osg::ref_ptr<osgViewer::Viewer> viewer;
 osg::observer_ptr<osgViewer::GraphicsWindow> window;
+
+//should the msg parsing be done in the websocket thread or main thread ?
+//only getting 3 ints in each message: type, x, y
+struct Msg {
+    Msg(vector< char >&& d) {
+        int* p = reinterpret_cast< int* >(&d[0]);
+        type = p[0];
+        x = p[1];
+        y = p[2];
+    }
+    int type = -1;
+    int x = -1;
+    int y = -1;
+};
+
+
+void HandleMessage() {
+    if(!msgQueue.Empty()) {
+        Msg msg(msgQueue.Get());
+        switch(msg.type) {
+        case 1: {
+            window->getEventQueue()->mouseButtonPress(msg.x, msg.y, 1);
+        }
+        break;
+        case 2: {
+            window->getEventQueue()->mouseButtonRelease(msg.x, msg.y, 1);
+        }
+        case 3: {
+            window->getEventQueue()->mouseMotion(msg.x,msg.y);
+        }
+        break;
+        default: break;          
+        }
+    }
+    glutPostRedisplay();
+}
 
 void display(void)
 {
@@ -231,7 +294,6 @@ void display(void)
     context->SetServiceDataSync(ReadImage());
     // Swap Buffers
     //glutSwapBuffers();
-    glutPostRedisplay();
 }
 
 void reshape( int w, int h )
@@ -352,6 +414,7 @@ int main( int argc, char **argv )
     glutMouseFunc( mousebutton );
     glutMotionFunc( mousemove );
     glutKeyboardFunc( keyboard );
+    glutIdleFunc(HandleMessage);
 
     viewer = new osgViewer::Viewer;
     window = viewer->setUpViewerAsEmbeddedInWindow(100,100,800,600);
