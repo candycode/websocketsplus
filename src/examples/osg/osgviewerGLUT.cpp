@@ -90,16 +90,19 @@ template < typename T >
 class SyncQueue {
 public:    
     T Get() {
+        std::lock_guard< std::mutex > guard(mutex_);
         const T d(move(q_.front()));
         q_.pop_front();
         return d; 
     }
     void Put(T&& d) {
+        std::lock_guard< std::mutex > guard(mutex_);
         q_.push_back(d);
     }
     bool Empty() const { return q_.empty(); }
 private:    
     deque< T > q_;
+    mutex mutex_;
 
 };
 
@@ -265,33 +268,36 @@ struct Msg {
     int y = -1;
 };
 
-
+void mousebutton( int button, int state, int x, int y );
+void mousemove(int x, int y );
 void HandleMessage() {
     if(!msgQueue.Empty()) {
         Msg msg(msgQueue.Get());
         switch(msg.type) {
         case 1: {
-            window->getEventQueue()->mouseButtonPress(msg.x, msg.y, 1);
+            mousebutton(0, 0, msg.x, msg.y );
         }
         break;
         case 2: {
-            window->getEventQueue()->mouseButtonRelease(msg.x, msg.y, 1);
+            mousebutton(0, 1, msg.x, msg.y );
         }
         case 3: {
-            window->getEventQueue()->mouseMotion(msg.x,msg.y);
+            mousemove(msg.x,msg.y);
         }
         break;
         default: break;          
         }
     }
-    glutPostRedisplay();
+
 }
 
 void display(void)
 {
+    HandleMessage();
     // update and render the scene graph
     if (viewer.valid()) viewer->frame();
     context->SetServiceDataSync(ReadImage());
+    glutPostRedisplay();
     // Swap Buffers
     //glutSwapBuffers();
 }
@@ -319,6 +325,7 @@ void mousebutton( int button, int state, int x, int y )
 {
     if (window.valid())
     {
+
         if (state==0) window->getEventQueue()->mouseButtonPress( x, y, button+1 );
         else window->getEventQueue()->mouseButtonRelease( x, y, button+1 );
     }
@@ -414,7 +421,7 @@ int main( int argc, char **argv )
     glutMouseFunc( mousebutton );
     glutMotionFunc( mousemove );
     glutKeyboardFunc( keyboard );
-    glutIdleFunc(HandleMessage);
+    //glutIdleFunc(HandleMessage);
 
     viewer = new osgViewer::Viewer;
     window = viewer->setUpViewerAsEmbeddedInWindow(100,100,800,600);
