@@ -124,7 +124,7 @@ tjhandle tj = tjhandle();
 GLuint pbo[2];
 int width = 0;
 int height = 0;
-int cs = TJSAMP_422;
+int cs = TJSAMP_444;
 int quality = 50;
 shared_ptr< wsp::Context< Image > > context(new wsp::Context< Image >);
 bool END = false;
@@ -305,7 +305,7 @@ void display(void)
     
     // Swap Buffers
     //comment for faster speed
-    glutSwapBuffers();
+   // glutSwapBuffers();
     //glutPostRedisplay();
 
 } 
