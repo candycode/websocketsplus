@@ -20,8 +20,11 @@
 // Simple example using GLUT to create an OpenGL window and OSG for rendering.
 // Derived from osgGLUTsimple.cpp and osgkeyboardmouse.cpp
 
-
+//LINUX:
 //g++ -std=c++11  ../src/examples/osg/osgviewerGLUT.cpp -I /usr/local/osg/include -L /usr/local/osg/lib64 -lOpenThreads -losgDB -losgGA -losgManipulator -losg -losgUtil -losgViewer -losgText -lglut -lGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib64  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread
+
+//APPLE:
+//clang++ -std=c++11  -stdlib=libc++ ../src/examples/osg/osgviewerGLUT.cpp -framework GLUT -I /usr/local/osg/include -L /usr/local/osg/lib -lOpenThreads -losgDB -losgGA -losgManipulator -losg -losgUtil -losgViewer -losgText  -framework OpenGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread
 
 #include <cassert>
 
@@ -64,6 +67,7 @@
 #include "../SessionService.h"
 using namespace std;
 //------------------------------------------------------------------------------
+#ifndef __APPLE__
 typedef void (*glBindBufferTYPE)(GLenum, GLuint); 
 glBindBufferTYPE glBindBuffer;
 typedef void* (*glMapBufferTYPE)(GLenum, GLenum); 
@@ -76,7 +80,7 @@ typedef void (*glGenBuffersTYPE)(GLsizei, GLuint*);
 glGenBuffersTYPE glGenBuffers;
 typedef void (*glDeleteBuffersTYPE)(GLsizei, const GLuint*);
 glDeleteBuffersTYPE glDeleteBuffers;
-
+#endif
 
 struct TJDeleter {
     void operator()(char* p) const {
@@ -384,7 +388,7 @@ int main( int argc, char **argv )
         std::cout << argv[0] <<": No data loaded." << std::endl;
         return 1;
     }
-
+#ifndef __APPLE__
     glBindBuffer = (glBindBufferTYPE) osg::getGLExtensionFuncPtr("glBindBuffer");
     glMapBuffer = (glMapBufferTYPE) osg::getGLExtensionFuncPtr("glMapBuffer");
     glUnmapBuffer = (glUnmapBufferTYPE) osg::getGLExtensionFuncPtr("glUnmapBuffer");
@@ -393,6 +397,7 @@ int main( int argc, char **argv )
     glDeleteBuffers = (glDeleteBuffersTYPE) osg::getGLExtensionFuncPtr("glDeleteBuffers");
     assert(glBindBuffer && glMapBuffer && glUnmapBuffer && glGenBuffers
            && glBufferData && glDeleteBuffers );
+#endif    
 
     //==========================================================================
     tj = tjInitCompress();
