@@ -91,13 +91,13 @@ class SyncQueue {
 public:    
     T Get() {
         std::lock_guard< std::mutex > guard(mutex_);
-        const T d(move(q_.front()));
+        const T d(q_.front());
         q_.pop_front();
         return d; 
     }
     void Put(T&& d) {
         std::lock_guard< std::mutex > guard(mutex_);
-        q_.push_back(d);
+        q_.push_back(move(d));
     }
     bool Empty() const { return q_.empty(); }
 private:    
@@ -124,8 +124,8 @@ tjhandle tj = tjhandle();
 GLuint pbo[2];
 int width = 0;
 int height = 0;
-int cs = TJSAMP_444;
-int quality = 75;
+int cs = TJSAMP_422;
+int quality = 50;
 shared_ptr< wsp::Context< Image > > context(new wsp::Context< Image >);
 bool END = false;
 Image ReadImage() {
@@ -288,19 +288,27 @@ void HandleMessage() {
         default: break;          
         }
     }
+    //
+}
 
+void idle() {
+   HandleMessage();
+   glutPostRedisplay();
 }
 
 void display(void)
-{
-    HandleMessage();
+{   
+   
     // update and render the scene graph
     if (viewer.valid()) viewer->frame();
     context->SetServiceDataSync(ReadImage());
-    glutPostRedisplay();
+    
     // Swap Buffers
-    //glutSwapBuffers();
-}
+    //comment for faster speed
+    glutSwapBuffers();
+    //glutPostRedisplay();
+
+} 
 
 void reshape( int w, int h )
 {
@@ -414,17 +422,17 @@ int main( int argc, char **argv )
 
     glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_ALPHA );
     glutInitWindowPosition( 100, 100 );
-    glutInitWindowSize( 800, 600 );
+    glutInitWindowSize( 1280, 720 );
     glutCreateWindow( argv[0] );
     glutDisplayFunc( display );
     glutReshapeFunc( reshape );
     glutMouseFunc( mousebutton );
     glutMotionFunc( mousemove );
     glutKeyboardFunc( keyboard );
-    //glutIdleFunc(HandleMessage);
+    glutIdleFunc(idle);
 
     viewer = new osgViewer::Viewer;
-    window = viewer->setUpViewerAsEmbeddedInWindow(100,100,800,600);
+    window = viewer->setUpViewerAsEmbeddedInWindow(0,0,1280,720);
     viewer->setSceneData(loadedModel.get());
     viewer->setCameraManipulator(new osgGA::TrackballManipulator);
     viewer->addEventHandler(new osgViewer::StatsHandler);

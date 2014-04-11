@@ -23,7 +23,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
        <script src=
   "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
        <script type="text/javascript">
-          
+          var websocket;
+       </script>
+       <script type="text/javascript" src="wsmouse.js">
+       </script>
+       <script type="text/javascript">
+         
           $(function() {
               window.WebSocket = window.WebSocket || window.MozWebSocket;
               var out = $("[name='output']");
@@ -43,7 +48,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var maxSize = 0; 
               
               
-              var websocket = new WebSocket('ws://127.0.0.1:5000',
+              websocket = new WebSocket('ws://127.0.0.1:5000',
                                             'image-stream');
               websocket.binaryType = "arraybuffer";
               websocket.onopen = function () {
@@ -86,34 +91,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                  imageUrl = urlCreator.createObjectURL( blob );
                  img.src = imageUrl;
               }
-              var MOUSE_DOWN = 1, MOUSE_UP = 2, MOUSE_MOVE = 3;
-              var sendBuffer = new Int32Array(3);   
-              var mouseDown = false;
-              function sendMouseEvent(m, e) {
-                e = e || window.event;
-                sendBuffer[0] = m;
-                sendBuffer[1] = e.clientX;
-                sendBuffer[2] = e.clientY;
-                if(!websocket || websocket.readyState != websocket.open) {
-                  console.log(sendBuffer[0] + " " +
-                              sendBuffer[1] + " " +
-                              sendBuffer[1]);
-                  //return;              
-                }  
-                websocket.send(sendBuffer);
-              }
-              window.onmousedown = function(e) {
-                mouseDown = true;
-                sendMouseEvent(MOUSE_DOWN, e);                    
-              }
-              window.onmouseup = function(e) {
-                 mouseDown = false;
-                sendMouseEvent(MOUSE_UP, e);                    
-              }
-              window.onmousemove = function(e) {
-                if(!mouseDown) return;
-                sendMouseEvent(MOUSE_MOVE, e);                    
-              }
+            
            });
        </script>
        <style>
@@ -140,7 +118,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
        </div>
 <!--        <div><img id="photo" style="width: 960px; height: 540px; display: block; margin-left: auto; margin-right: auto"/></div> -->
 <!--width: 2880px; height: 1800px; -->
-       <div><img id="photo" style="z-index: -1;position: absolute; top:0;left:0; overflow: scroll"/></div> 
+       <div><img id="photo" style="pointer-events: none; z-index: -1;position: absolute; top:0;left:0; overflow: scroll"/></div> 
    </body>
 </html>
 

@@ -30,6 +30,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             display: block;  /* No floating content on sides */
         }
     </style>
+        <script type="text/javascript">
+          var websocket;
+       </script>
+       <script type="text/javascript" src="wsmouse.js">
+       </script>
        <script src=
   "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
        <script type="text/javascript">
@@ -62,7 +67,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 context.drawImage(img, 0, 0);
               }  
               
-              var websocket = new WebSocket('ws://127.0.0.1:5000',
+              websocket = new WebSocket('ws://127.0.0.1:5000',
                                             'image-stream');
               websocket.binaryType = "arraybuffer";
              
@@ -120,9 +125,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
            });
        </script>
+        <style>
+       body{
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+       }
+       </style>
        </head>
    <body>
-    <div style="color: red; font-size: 300%">
+    <div style="color: red; font-size: 200%">
        <h1>WebSockets stream test</h1>
        <div>Frame/s: <span name="output"></span></div>
        <div>Size: <span name="bytes"></span> bytes</div>
