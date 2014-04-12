@@ -14,12 +14,13 @@ var count = 4; //use this to send only 1/4 of the move events, makes it
 // }​
 
 function sendMouseEvent(m, e) {
+  e.preventDefault();
   if(m == MOUSE_MOVE) if(--count > 0) return;
   e = e || window.event;
   sendBuffer[0] = m;
   if(m == MOUSE_MOVE || m == MOUSE_UP) {
-    sendBuffer[1] = 1.2 * e.clientX;
-    sendBuffer[2] = 1.2 * e.clientY;
+    sendBuffer[1] = e.clientX;
+    sendBuffer[2] = e.clientY;
   } else {
     sendBuffer[1] = e.clientX;
     sendBuffer[2] = e.clientY;
@@ -45,3 +46,11 @@ window.onmousemove = function(e) {
   if(!mouseDown) return;
   sendMouseEvent(MOUSE_MOVE, e);                    
 }
+
+// window.addEventListener("touchstart", handleStart, false);
+// window.addEventListener("touchend", handleEnd, false);
+// window.addEventListener("touchcancel", handleCancel, false);
+// window.addEventListener("touchleave", handleEnd, false);
+// window.addEventListener("touchmove", handleMove, false);
+
+
