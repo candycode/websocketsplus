@@ -40,8 +40,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 context.drawImage(img, 0, 0);
               }  
               
-              var websocket = new WebSocket('ws://127.0.0.1:5000',
-                                            'image-stream');
+              var proto = location.protocol;
+              var hostname = "localhost";
+              if(proto != "file:") hostname = location.hostname;
+              var WSURL = "ws://" + hostname + ":5000";
+              websocket = new WebSocket(WSURL, 'image-stream');
               websocket.binaryType = "arraybuffer";
               websocket.onopen = function () {
                   $('h1').css('color', 'green');

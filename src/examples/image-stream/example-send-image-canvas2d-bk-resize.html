@@ -66,9 +66,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               img.onload = function() {
                 context.drawImage(img, 0, 0);
               }  
-              var WSURL = 'ws://192.168.1.103:5000'
-              websocket = new WebSocket(WSURL,
-                                        'image-stream');
+              var proto = location.protocol;
+              var hostname = "localhost";
+              if(proto != "file:") hostname = location.hostname;
+              var WSURL = "ws://" + hostname + ":5000";
+              websocket = new WebSocket(WSURL, 'image-stream');
               websocket.binaryType = "arraybuffer";
              
 

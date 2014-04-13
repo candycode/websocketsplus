@@ -225,7 +225,7 @@ public:
     std::chrono::duration< double > 
     MinDelayBetweenWrites() const {
         //use 0.0
-        return std::chrono::duration< double >(0.001);
+        return std::chrono::duration< double >(0.000);
     }
 private:
     void InitDataFrame() const {
@@ -297,7 +297,6 @@ void HandleMessage() {
 
 void idle() {
    HandleMessage();
-   glutPostRedisplay();
 }
 
 void display(void)
@@ -306,7 +305,7 @@ void display(void)
     // update and render the scene graph
     if (viewer.valid()) viewer->frame();
     context->SetServiceDataSync(ReadImage());
-    
+    glutPostRedisplay();
     // Swap Buffers
     //comment for faster speed
    // glutSwapBuffers();
