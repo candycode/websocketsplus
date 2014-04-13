@@ -33,6 +33,25 @@
 #include <sstream>
 #include <string.h>
 
+
+//==============================================================================
+#include <thread>
+#include <future>
+#include <memory>
+#include <chrono>
+#include <map>
+#include <deque>
+
+#include <turbojpeg.h>
+
+#include "../../WebSocketService.h"
+#include "../../Context.h"
+#include "../SessionService.h"
+using namespace std;
+
+
+
+
 class WindowCaptureCallback : public osg::Camera::DrawCallback
 {
     public:
@@ -324,6 +343,54 @@ void WindowCaptureCallback::ContextData::readPixels()
     _currentImageIndex = nextImageIndex;
     _currentPboIndex = nextPboIndex;
 }
+//==============================================================================
+struct TJDeleter {
+    void operator()(char* p) const {
+        tjFree((unsigned char*) p);
+    }
+};
+
+using ImagePtr = shared_ptr< char >;
+
+template < typename T >
+class SyncQueue {
+public:    
+    T Get() {
+        std::lock_guard< std::mutex > guard(mutex_);
+        const T d(q_.front());
+        q_.pop_front();
+        return d; 
+    }
+    void Put(T&& d) {
+        std::lock_guard< std::mutex > guard(mutex_);
+        q_.push_back(move(d));
+    }
+    bool Empty() const { return q_.empty(); }
+private:    
+    deque< T > q_;
+    mutex mutex_;
+
+};
+
+SyncQueue< vector< char > > msgQueue;
+
+struct Image {
+    int id = 0;
+    ImagePtr image;
+    size_t size = 0;
+    Image() = default;
+    Image(ImagePtr i, size_t s, int c) : image(i), size(s), id(c) {}
+    Image(const Image&) = default;
+    Image(Image&&) = default;
+    Image& operator=(const Image&) = default;
+    Image& operator=(Image&&) = default;
+};
+shared_ptr< wsp::Context< Image > > context(new wsp::Context< Image >);
+tjhandle tj = tjhandle();
+bool END = false;
+int cs = TJSAMP_444;
+int quality = 100;
+//==============================================================================
 
 void WindowCaptureCallback::ContextData::singlePBO(osg::GLBufferObject::Extensions* ext)
 {
@@ -383,16 +450,35 @@ void WindowCaptureCallback::ContextData::singlePBO(osg::GLBufferObject::Extensio
                                               GL_READ_ONLY_ARB);
     if(src)
     {
-        memcpy(image->data(), src, image->getTotalSizeInBytes());
+    //========================================================================== 
+    static int count = 0;
+    char* out = nullptr;
+    unsigned long size = 0;
+    tjCompress2(tj,
+        (unsigned char*) src,
+        _width,
+        tjPixelSize[TJPF_RGBA] * _width,
+        _height,
+        TJPF_BGRA,
+        (unsigned char **) &out,
+        &size,
+        cs, //444=best quality,
+                    //420=fast and still unnoticeable but MIGHT NOT WORK
+                    //IN SOME BROWSERS
+        quality,
+        TJXOP_VFLIP );    
+        //memcpy(image->data(), src, image->getTotalSizeInBytes());
         
         ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
+        context->SetServiceDataSync(Image(ImagePtr((char*) out, TJDeleter()), size, count++));
+        
     }
 
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
 
     osg::Timer_t tick_afterMemCpy = osg::Timer::instance()->tick();
 
-    updateTimings(tick_start, tick_afterReadPixels, tick_afterMemCpy, image->getTotalSizeInBytes());
+    //updateTimings(tick_start, tick_afterReadPixels, tick_afterMemCpy, image->getTotalSizeInBytes());
 
     if (!_fileName.empty())
     {
@@ -484,8 +570,27 @@ void WindowCaptureCallback::ContextData::multiPBO(osg::GLBufferObject::Extension
                                                   GL_READ_ONLY_ARB);
         if(src)
         {
-            memcpy(image->data(), src, image->getTotalSizeInBytes());
+            //========================================================================== 
+            static int count = 0;
+            char* out = nullptr;
+            unsigned long size = 0;
+            tjCompress2(tj,
+            (unsigned char*) src,
+                width,
+                tjPixelSize[TJPF_RGBA] * width,
+                height,
+                TJPF_BGRA,
+                (unsigned char **) &out,
+                &size,
+                cs, //444=best quality,
+                            //420=fast and still unnoticeable but MIGHT NOT WORK
+                            //IN SOME BROWSERS
+                quality,
+                TJXOP_VFLIP );    
+            //memcpy(image->data(), src, image->getTotalSizeInBytes());
+            
             ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
+            context->SetServiceDataSync(Image(ImagePtr((char*) out, TJDeleter()), size, count++));
         }
 
         if (!_fileName.empty())
@@ -496,9 +601,9 @@ void WindowCaptureCallback::ContextData::multiPBO(osg::GLBufferObject::Extension
     
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
 
-    osg::Timer_t tick_afterMemCpy = osg::Timer::instance()->tick();
+    // osg::Timer_t tick_afterMemCpy = osg::Timer::instance()->tick();
     
-    updateTimings(tick_start, tick_afterReadPixels, tick_afterMemCpy, image->getTotalSizeInBytes());
+    // updateTimings(tick_start, tick_afterReadPixels, tick_afterMemCpy, image->getTotalSizeInBytes());
 
     _currentImageIndex = nextImageIndex;
     _currentPboIndex = nextPboIndex;
@@ -598,7 +703,78 @@ void addCallbackToViewer(osgViewer::ViewerBase& viewer, WindowCaptureCallback* c
         }
     }
 }
-
+/// Image service: streams a sequence of images
+class ImageService : public SessionService< wsp::Context< Image > > {
+    using Context = wsp::Context< Image >;
+public:
+    using DataFrame = SessionService::DataFrame;
+    ImageService(Context* c) :
+     SessionService(c), ctx_(c) {
+        InitDataFrame();
+    }
+    bool Data() const override { 
+        if(img_.size > 0) return true;
+        else {
+            InitDataFrame();
+            return false;
+        }
+    }
+    //return data frame and update frame end
+    const DataFrame& Get(int requestedChunkLength) {
+        if(df_.frameEnd < df_.bufferEnd) {
+           //frameBegin *MUST* be updated in the UpdateOutBuffer method
+           //because in case the consumed data is less than requestedChunkLength
+           df_.frameEnd += min((ptrdiff_t) requestedChunkLength, 
+                               df_.bufferEnd - df_.frameEnd);
+        } else {
+           InitDataFrame();
+        }
+        return df_;  
+    }
+    //update frame begin/end
+    void UpdateOutBuffer(int bytesConsumed) {
+        df_.frameBegin += bytesConsumed;
+        df_.frameEnd = df_.frameBegin;
+    }
+    //streaming: always in send mode, no receive
+    bool Sending() const override { return true; }
+    void Put(void* p, size_t len, bool done) override {
+        // in_.insert(in_.end(), (char*) p, (char*) p + len);
+        // if(done) {
+        //     msgQueue.Put(move(in_));
+        //     in_.resize(0);
+        // }
+    }
+    std::chrono::duration< double > 
+    MinDelayBetweenWrites() const {
+        //use 0.0
+        return std::chrono::duration< double >(0.000);
+    }
+private:
+    void InitDataFrame() const {
+        if(ctx_->GetServiceData().id == img_.id) {
+            if(dontSendIfEqual_) {
+                //do not ever try to delete the memory in the smart pointer:
+                //it is allocated in the main thread and deallocated when
+                //the smart pointer counter reaches zero
+                img_.size = 0;
+                return;
+            }
+        }
+        img_ = ctx_->GetServiceDataSync();
+        df_.bufferBegin = img_.image.get();
+        df_.bufferEnd = df_.bufferBegin + img_.size;
+        df_.frameBegin = df_.bufferBegin;
+        df_.frameEnd = df_.frameBegin;
+        df_.binary = true;
+    }    
+private:    
+    mutable DataFrame df_;
+    mutable Context* ctx_ = nullptr;
+    mutable Image img_;
+    bool dontSendIfEqual_ = true;
+    vector< char > in_;
+};
 int main(int argc, char** argv)
 {
     // use an ArgumentParser object to manage the program arguments.
@@ -750,7 +926,29 @@ int main(int argc, char** argv)
 
     viewer.setSceneData( loadedModel.get() );
 
-    
+    //==========================================================================
+    tj = tjInitCompress();
+    using WSS = wsp::WebSocketService;
+    WSS imageStreamer;
+    //WSS::ResetLogLevels(); 
+    //init service
+    auto is = async(launch::async, [](WSS& imageStreamer){
+        imageStreamer.Init(5000, //port
+                           nullptr, //SSL certificate path
+                           nullptr, //SSL key path
+                           context, //context instance,
+                           //will be copied internally
+                           WSS::Entry< ImageService,
+                                       WSS::ASYNC_REP >("image-stream"));
+         //start event loop: one iteration every >= 50ms
+        imageStreamer.StartLoop(5, //ms
+                 [](){return !END;} //termination condition (exit on false)
+                                  //checked at each iteration, loops forever
+                                  //in this case
+                 );
+
+    }, std::ref(imageStreamer));
+    //==========================================================================
     if (pbuffer.valid())
     {
         osg::ref_ptr<osg::Camera> camera = new osg::Camera;
