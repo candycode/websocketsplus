@@ -49,7 +49,33 @@
 #include "../SessionService.h"
 using namespace std;
 
+struct Msg {
+    Msg(vector< char >&& d) {
+        int* p = reinterpret_cast< int* >(&d[0]);
+        type = p[0];
+        x = p[1];
+        y = p[2];
+    }
+    int type = -1;
+    int x = -1;
+    int y = -1;
+};
 
+osgViewer::Viewer* v;
+void mousebutton( int button, int state, int x, int y )
+{
+   
+    if (state==0) v->getEventQueue()->mouseButtonPress( x, y, button+1 );
+    else v->getEventQueue()->mouseButtonRelease( x, y, button+1 );
+
+}
+
+void mousemove( int x, int y )
+{
+    {
+        v->getEventQueue()->mouseMotion( x, y );
+    }
+}
 
 
 class WindowCaptureCallback : public osg::Camera::DrawCallback
@@ -109,7 +135,6 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback
             
                 getSize(gc, _width, _height);
                 
-                std::cout<<"Window size "<<_width<<", "<<_height<<std::endl;
             
                 // single buffered image
                 _imageBuffer.push_back(new osg::Image);
@@ -142,11 +167,13 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback
             
             void getSize(osg::GraphicsContext* gc, int& width, int& height)
             {
-                if (gc->getTraits())
-                {
-                    width = gc->getTraits()->width;
-                    height = gc->getTraits()->height;
-                }
+                width = width_;
+                height = height_;
+                // if (gc->getTraits())
+                // {
+                //     width = gc->getTraits()->width;
+                //     height = gc->getTraits()->height;
+                // }
             }
             
             void updateTimings(osg::Timer_t tick_start,
@@ -206,6 +233,8 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback
             double                  _timeForFullCopy;
             double                  _timeForMemCpy;
             osg::Timer_t            _previousFrameTick;
+            int width_;
+            int height_;
         };
     
         WindowCaptureCallback(Mode mode, FramePosition position, GLenum readBuffer):
@@ -240,6 +269,11 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback
             osg::GraphicsContext* gc = renderInfo.getState()->getGraphicsContext();
             osg::ref_ptr<ContextData> cd = getContextData(gc);
             cd->read();
+            cd->width_ = renderInfo.getCurrentCamera()->getViewport()->width();
+            cd->height_ = renderInfo.getCurrentCamera()->getViewport()->height();
+            osg::Camera* camera = renderInfo.getCurrentCamera();
+            camera->setProjectionMatrixAsPerspective(30.0f, static_cast<double>(cd->width_)/static_cast<double>(cd->height_), 1.0f, 10000.0f);
+           
         }
         
         typedef std::map<osg::GraphicsContext*, osg::ref_ptr<ContextData> > ContextDataMap;
@@ -249,7 +283,6 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback
         GLenum                      _readBuffer;
         mutable OpenThreads::Mutex  _mutex;
         mutable ContextDataMap      _contextDataMap;
-        
         
 };
 
@@ -388,8 +421,29 @@ struct Image {
 shared_ptr< wsp::Context< Image > > context(new wsp::Context< Image >);
 tjhandle tj = tjhandle();
 bool END = false;
-int cs = TJSAMP_444;
-int quality = 100;
+int cs = TJSAMP_440;
+int quality = 50;
+void HandleMessage() {
+    if(!msgQueue.Empty()) {
+        Msg msg(msgQueue.Get());
+        switch(msg.type) {
+        case 1: {
+            mousebutton(0, 0, msg.x, msg.y );
+        }
+        break;
+        case 2: {
+            mousebutton(0, 1, msg.x, msg.y );
+        }
+        case 3: {
+            mousemove(msg.x,msg.y);
+        }
+        break;
+        default: break;          
+        }
+    }
+    //
+}
+
 //==============================================================================
 
 void WindowCaptureCallback::ContextData::singlePBO(osg::GLBufferObject::Extensions* ext)
@@ -456,9 +510,9 @@ void WindowCaptureCallback::ContextData::singlePBO(osg::GLBufferObject::Extensio
     unsigned long size = 0;
     tjCompress2(tj,
         (unsigned char*) src,
-        _width,
-        tjPixelSize[TJPF_RGBA] * _width,
-        _height,
+        width,
+        tjPixelSize[TJPF_RGBA] * width,
+        height,
         TJPF_BGRA,
         (unsigned char **) &out,
         &size,
@@ -556,7 +610,7 @@ void WindowCaptureCallback::ContextData::multiPBO(osg::GLBufferObject::Extension
     osg::Timer_t tick_start = osg::Timer::instance()->tick();
 
 #if 1
-    glReadPixels(0, 0, _width, _height, _pixelFormat, _type, 0);
+    glReadPixels(0, 0, width, height, _pixelFormat, _type, 0);
 #endif
 
     osg::Timer_t tick_afterReadPixels = osg::Timer::instance()->tick();
@@ -627,6 +681,7 @@ void addCallbackToViewer(osgViewer::ViewerBase& viewer, WindowCaptureCallback* c
                 cam_itr != cameras.end();
                 ++cam_itr)
             {
+                cout << "!!!" << (*cam_itr)->getViewport()->width() << endl;
                 if (firstCamera)
                 {
                     if ((*cam_itr)->getRenderOrder() < firstCamera->getRenderOrder())
@@ -664,7 +719,7 @@ void addCallbackToViewer(osgViewer::ViewerBase& viewer, WindowCaptureCallback* c
         for(osgViewer::ViewerBase::Windows::iterator itr = windows.begin();
             itr != windows.end();
             ++itr)
-        {
+        { 
             osgViewer::GraphicsWindow* window = *itr;
             osg::GraphicsContext::Cameras& cameras = window->getCameras();
             osg::Camera* lastCamera = 0;
@@ -672,6 +727,7 @@ void addCallbackToViewer(osgViewer::ViewerBase& viewer, WindowCaptureCallback* c
                 cam_itr != cameras.end();
                 ++cam_itr)
             {
+                cout << "!!!" << (*cam_itr)->getViewport()->width() << endl;
                 if (lastCamera)
                 {
                     if ((*cam_itr)->getRenderOrder() > lastCamera->getRenderOrder())
@@ -739,16 +795,16 @@ public:
     //streaming: always in send mode, no receive
     bool Sending() const override { return true; }
     void Put(void* p, size_t len, bool done) override {
-        // in_.insert(in_.end(), (char*) p, (char*) p + len);
-        // if(done) {
-        //     msgQueue.Put(move(in_));
-        //     in_.resize(0);
-        // }
+        in_.insert(in_.end(), (char*) p, (char*) p + len);
+        if(done) {
+            msgQueue.Put(move(in_));
+            in_.resize(0);
+        }
     }
     std::chrono::duration< double > 
     MinDelayBetweenWrites() const {
         //use 0.0
-        return std::chrono::duration< double >(0.000);
+        return std::chrono::duration< double >(0.0);
     }
 private:
     void InitDataFrame() const {
@@ -784,7 +840,7 @@ int main(int argc, char** argv)
     arguments.getApplicationUsage()->setCommandLineUsage(arguments.getApplicationName()+" [options] filename ...");
 
     osgViewer::Viewer viewer(arguments);
-
+    v = &viewer;
     unsigned int helpType = 0;
     if ((helpType = arguments.readHelpType()))
     {
@@ -868,8 +924,8 @@ int main(int argc, char** argv)
     while (arguments.read("--triple-pbo")) mode = WindowCaptureCallback::TRIPLE_PBO;
 
     
-    unsigned int width=1280;
-    unsigned int height=1024;
+    unsigned int width=1440;
+    unsigned int height=900;
     bool pbufferOnly = false;
     osg::ref_ptr<osg::GraphicsContext> pbuffer;
     if (arguments.read("--pbuffer",width,height) || 
@@ -900,7 +956,7 @@ int main(int argc, char** argv)
         }
 
     }
-        
+    cout << width << ' ' << height << endl;    
     // load the data
     osg::ref_ptr<osg::Node> loadedModel = osgDB::readNodeFiles(arguments);
     if (!loadedModel) 
@@ -941,7 +997,7 @@ int main(int argc, char** argv)
                            WSS::Entry< ImageService,
                                        WSS::ASYNC_REP >("image-stream"));
          //start event loop: one iteration every >= 50ms
-        imageStreamer.StartLoop(5, //ms
+        imageStreamer.StartLoop(1, //ms
                  [](){return !END;} //termination condition (exit on false)
                                   //checked at each iteration, loops forever
                                   //in this case
@@ -951,17 +1007,20 @@ int main(int argc, char** argv)
     //==========================================================================
     if (pbuffer.valid())
     {
-        osg::ref_ptr<osg::Camera> camera = new osg::Camera;
+        osg::ref_ptr<osg::Camera> camera = viewer.getCamera();// new osg::Camera;
         camera->setGraphicsContext(pbuffer.get());
-        camera->setViewport(new osg::Viewport(0,0,width,height));
+        //camera->setViewport(new osg::Viewport(0,0,4 * height / 3, height));
+        camera->setViewport(new osg::Viewport(0,0,width, height));
         GLenum buffer = pbuffer->getTraits()->doubleBuffer ? GL_BACK : GL_FRONT;
         camera->setDrawBuffer(buffer);
         camera->setReadBuffer(buffer);
         camera->setFinalDrawCallback(new WindowCaptureCallback(mode, position, readBuffer));
-
+        camera->setProjectionResizePolicy(osg::Camera::VERTICAL);
+        camera->setProjectionMatrixAsPerspective(30.0f, static_cast<double>(width)/static_cast<double>(height), 1.0f, 10000.0f);
+         
         if (pbufferOnly)
         {
-            viewer.addSlave(camera.get(), osg::Matrixd(), osg::Matrixd());
+            //viewer.addSlave(camera.get(), osg::Matrixd(), osg::Matrixd());
 
             viewer.realize();
         }
@@ -984,7 +1043,17 @@ int main(int argc, char** argv)
 
         addCallbackToViewer(viewer, new WindowCaptureCallback(mode, position, readBuffer));
     }
+    //required to make sending events work in offscreen pbo-only mode!
 
-    return viewer.run();
-
+    viewer.getEventQueue()->windowResize(0, 0, width, height);
+    // add the state manipulator
+    viewer.addEventHandler( new osgGA::StateSetManipulator(viewer.getCamera()->getOrCreateStateSet()) );
+    vector< osg::Camera* > c;
+    viewer.getCameras(c, false);
+    while(true) {
+        HandleMessage();
+        viewer.frame();
+    }
+    //return viewer.run();
+    return 0;
 }

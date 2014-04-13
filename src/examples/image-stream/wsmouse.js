@@ -3,7 +3,7 @@ var sendBuffer = new Int32Array(3);
 var mouseDown = false;
 var count = 4; //use this to send only 1/4 of the move events, makes it
                //more responsive
-
+var TOUCH_EVENTS = true;
 // function getPos(e) {
 //   e = e || window.event;
 //   var docEl = document.documentElement;
@@ -15,7 +15,7 @@ var count = 4; //use this to send only 1/4 of the move events, makes it
 
 function sendMouseEvent(m, e) {
   //e.preventDefault();
-  if(m == MOUSE_MOVE) if(--count > 0) return;
+  //if(m == MOUSE_MOVE) if(--count > 0) return;
   e = e || window.event;
   sendBuffer[0] = m;
   sendBuffer[1] = e.clientX;
@@ -28,7 +28,7 @@ function sendMouseEvent(m, e) {
   //   //return;              
   // }  
   websocket.send(sendBuffer);
-  if(m == MOUSE_MOVE) count = 4;
+  //if(m == MOUSE_MOVE) count = 4;
 }
 window.onmousedown = function(e) {
   e.preventDefault();
@@ -65,11 +65,12 @@ function handleMove(e) {
 function handleCancel(e) {
   e.preventDefault();  
 }
-
-window.addEventListener("touchstart", handleStart, false);
-window.addEventListener("touchend", handleEnd, false);
-window.addEventListener("touchcancel", handleCancel, false);
-window.addEventListener("touchleave", handleEnd, false);
-window.addEventListener("touchmove", handleMove, false);
+if(TOUCH_EVENTS) {
+  window.addEventListener("touchstart", handleStart, false);
+  window.addEventListener("touchend", handleEnd, false);
+  window.addEventListener("touchcancel", handleCancel, false);
+  window.addEventListener("touchleave", handleEnd, false);
+  window.addEventListener("touchmove", handleMove, false);
+}
 
 
