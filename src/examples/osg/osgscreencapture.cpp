@@ -34,7 +34,7 @@
 #include <sstream>
 #include <string.h>
 
-
+//g++ -std=c++11  ../src/examples/osg/osgscreencapture.cpp -I /usr/local/osg/include -L /usr/local/osg/lib64 -lOpenThreads -losgDB -losgGA -losgManipulator -losg -losgUtil -losgViewer -losgText -lglut -lGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib64  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread
 //==============================================================================
 #include <thread>
 #include <future>
@@ -132,7 +132,7 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback
 
             {
 
-                if (gc->getTraits())
+                if (gc && gc->getTraits())
                 {
                     if (gc->getTraits()->alpha)
                     {
@@ -192,8 +192,8 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback
             }
             
             ~ContextData() {
-                osg::GLBufferObject::Extensions* ext = osg::GLBufferObject::getExtensions(_gc->getState()->getContextID(),true);
-                for(auto& i: _pboBuffer) if(i) ext->glDeleteBuffers(1, &i);
+                //osg::GLBufferObject::Extensions* ext = osg::GLBufferObject::getExtensions(_gc->getState()->getContextID(),true);
+                //for(auto& i: _pboBuffer) if(i) ext->glDeleteBuffers(1, &i);
             }
 
             void singlePBO(osg::GLBufferObject::Extensions* ext);
@@ -608,40 +608,32 @@ int main(int argc, char** argv)
     while (arguments.read("--single-pbo")) mode = WindowCaptureCallback::SINGLE_PBO;
     while (arguments.read("--double-pbo")) mode = WindowCaptureCallback::DOUBLE_PBO;
     while (arguments.read("--triple-pbo")) mode = WindowCaptureCallback::TRIPLE_PBO;
-
+    
     
     unsigned int width=1440;
     unsigned int height=900;
-    bool pbufferOnly = false;
+    arguments.read("--ss", width, height);
     osg::ref_ptr<osg::GraphicsContext> pbuffer;
-    if (arguments.read("--pbuffer",width,height) || 
-        (pbufferOnly = arguments.read("--pbuffer-only",width,height)))
-    {
-        osg::ref_ptr<osg::GraphicsContext::Traits> traits = new osg::GraphicsContext::Traits;
-        traits->x = 0;
-        traits->y = 0;
-        traits->width = width;
-        traits->height = height;
-        traits->red = 8;
-        traits->green = 8;
-        traits->blue = 8;
-        traits->alpha = 8;
-        traits->windowDecoration = false;
-        traits->pbuffer = true;
-        traits->doubleBuffer = true;
-        traits->sharedContext = 0;
-
-        pbuffer = osg::GraphicsContext::createGraphicsContext(traits.get());
-        if (pbuffer.valid())
-        {
-            osg::notify(osg::NOTICE)<<"Pixel buffer has been created successfully."<<std::endl;
-        }
-        else
-        {
-            osg::notify(osg::NOTICE)<<"Pixel buffer has not been created successfully."<<std::endl;
-        }
-
+    osg::ref_ptr<osg::GraphicsContext::Traits> traits = new osg::GraphicsContext::Traits;
+    traits->x = 0;
+    traits->y = 0;
+    traits->width = width;
+    traits->height = height;
+    traits->red = 8;
+    traits->green = 8;
+    traits->blue = 8;
+    traits->alpha = 8;
+    traits->windowDecoration = false;
+    traits->pbuffer = true;
+    traits->doubleBuffer = true;
+    traits->sharedContext = 0;
+    pbuffer = osg::GraphicsContext::createGraphicsContext(traits.get());
+  
+    if(!pbuffer.valid()) {
+        osg::notify(osg::FATAL)<<"Pixel buffer has not been created successfully."<<std::endl;
+        return -1;
     }
+
  
     // load the data
     osg::ref_ptr<osg::Node> loadedModel = osgDB::readNodeFiles(arguments);
@@ -691,24 +683,20 @@ int main(int argc, char** argv)
 
     }, std::ref(imageStreamer));
     //==========================================================================
-    if(pbufferOnly && pbuffer.valid()) {
-        osg::ref_ptr<osg::Camera> camera = viewer.getCamera();// new osg::Camera;
-        camera->setGraphicsContext(pbuffer.get());
-        camera->setViewport(new osg::Viewport(0,0,width, height));
-        GLenum buffer = pbuffer->getTraits()->doubleBuffer ? GL_BACK : GL_FRONT;
-        camera->setDrawBuffer(buffer);
-        camera->setReadBuffer(buffer);
-        camera->setFinalDrawCallback(new WindowCaptureCallback(mode, readBuffer));
-        camera->setProjectionResizePolicy(osg::Camera::VERTICAL);
-        camera->setProjectionMatrixAsPerspective(30.0f, static_cast<double>(width)/static_cast<double>(height), 1.0f, 10000.0f);
-        viewer.realize();
-    }
-    else return 0;
+    osg::ref_ptr<osg::Camera> camera = viewer.getCamera();// new osg::Camera;
+    camera->setGraphicsContext(pbuffer.get());
+    camera->setViewport(new osg::Viewport(0,0,width, height));
+    GLenum buffer = pbuffer->getTraits()->doubleBuffer ? GL_BACK : GL_FRONT;
+    camera->setDrawBuffer(buffer);
+    camera->setReadBuffer(buffer);
+    camera->setFinalDrawCallback(new WindowCaptureCallback(mode, readBuffer));
+    camera->setProjectionResizePolicy(osg::Camera::VERTICAL);
+    camera->setProjectionMatrixAsPerspective(30.0f, static_cast<double>(width)/static_cast<double>(height), 1.0f, 10000.0f);
+    viewer.realize();
+   
    
     //required to make sending events work in offscreen pbo-only mode!
-    viewer.getEventQueue()->windowResize(0, 0, width, height);
-   
-    
+    viewer.getEventQueue()->windowResize(0, 0, width, height);  
     
     using namespace chrono;
     const microseconds T(int(1E6/60.0));
@@ -726,7 +714,6 @@ int main(int argc, char** argv)
 #endif                                
         std::this_thread::sleep_for(
             max(duration_values< microseconds >::zero(), T - E));
-        END = true;
     }
     is.wait();
     return 0;
