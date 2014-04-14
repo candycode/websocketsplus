@@ -51,6 +51,9 @@ using namespace std;
 
 bool END = false;
 
+
+osg::ref_ptr< osgGA::StateSetManipulator > stateManipulator;
+
 bool MouseEvent(int e) {
     return e >= 1 && e <= 3;
 }
@@ -68,6 +71,7 @@ struct Msg {
             y = p[2];
         } else if(KeyEvent(type)) {
             key = p[1];
+            if(!(p[2] & 0x100)) key = tolower(key);
         }
     }
     int type = -1;
@@ -92,9 +96,14 @@ void mousemove( int x, int y )
     }
 }
 
+
+
 void keyevent(int k) {
-    if(k == 27) END = true;
-    else v->getEventQueue()->keyPress((osgGA::GUIEventAdapter::KeySymbol) k);
+    if(k == 27) {
+        END = true;
+        return;
+    }
+    v->getEventQueue()->keyPress((osgGA::GUIEventAdapter::KeySymbol) k);
 }
 
 
@@ -572,9 +581,7 @@ int main(int argc, char** argv)
         viewer.setCameraManipulator( keyswitchManipulator.get() );
     }
 
-    // add the state manipulator
-    viewer.addEventHandler(new osgGA::StateSetManipulator(viewer.getCamera()->getOrCreateStateSet()));
-    
+  
     // add the thread model handler
     viewer.addEventHandler(new osgViewer::ThreadingHandler);
 
@@ -700,6 +707,10 @@ int main(int argc, char** argv)
    
     //required to make sending events work in offscreen pbo-only mode!
     viewer.getEventQueue()->windowResize(0, 0, width, height);
+    // add the state manipulator
+    stateManipulator = new osgGA::StateSetManipulator(viewer.getCamera()->getOrCreateStateSet());
+    viewer.addEventHandler(stateManipulator.get());
+    
    
     using namespace chrono;
     const microseconds T(int(1E6/60.0));

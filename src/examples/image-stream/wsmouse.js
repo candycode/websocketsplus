@@ -32,12 +32,18 @@ function sendMouseEvent(m, e) {
   //if(m == MOUSE_MOVE) count = 4;
 }
 
+//ALL Chars are sent as capital letters!
+//http://www.javascriptkit.com/jsref/eventkeyboardmouse.shtml
 function sendKeyEvent(e) {
   //alert(e.keyCode);
   e = e || window.event;
   sendBuffer[0] = KEY;
   sendBuffer[1] = e.keyCode || e.charCode;
-  sendBuffer[2] = -1; // will use for shiftKey etc.
+  var k = 0;
+  if(e.altKey) k |= 0x1;
+  if(e.ctrlKey) k |= 0x10;
+  if(e.shiftKey) k != 0x100;
+  sendBuffer[2] = k;
   websocket.send(sendBuffer);
 }
 
