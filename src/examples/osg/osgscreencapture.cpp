@@ -28,6 +28,7 @@
 #include <osgGA/StateSetManipulator>
 #include <osgGA/AnimationPathManipulator>
 #include <osgGA/TerrainManipulator>
+#include <osgGA/SphericalManipulator>
 
 #include <iostream>
 #include <sstream>
@@ -50,9 +51,6 @@
 using namespace std;
 
 bool END = false;
-
-
-osg::ref_ptr< osgGA::StateSetManipulator > stateManipulator;
 
 bool MouseEvent(int e) {
     return e >= 1 && e <= 3;
@@ -113,18 +111,12 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback
     
         enum Mode
         {
-            READ_PIXELS,
             SINGLE_PBO,
             DOUBLE_PBO,
             TRIPLE_PBO
         };
     
-        enum FramePosition
-        {
-            START_FRAME,
-            END_FRAME
-        };
-    
+         
         struct ContextData : public osg::Referenced
         {
         
@@ -199,6 +191,10 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback
               
             }
             
+            ~ContextData() {
+                osg::GLBufferObject::Extensions* ext = osg::GLBufferObject::getExtensions(_gc->getState()->getContextID(),true);
+                for(auto& i: _pboBuffer) if(i) ext->glDeleteBuffers(1, &i);
+            }
 
             void singlePBO(osg::GLBufferObject::Extensions* ext);
 
@@ -222,7 +218,7 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback
             int height_;
         };
     
-        WindowCaptureCallback(Mode mode, FramePosition position, GLenum readBuffer):
+        WindowCaptureCallback(Mode mode, GLenum readBuffer):
             _mode(mode),
             _readBuffer(readBuffer)
         {
@@ -319,7 +315,7 @@ void HandleMessage() {
         break;
         case 2: {
             mousebutton(0, 1, msg.x, msg.y );
-            quality = 50;
+            quality = 75;
         }
         case 3: {
             mousemove(msg.x,msg.y);
@@ -340,7 +336,7 @@ void HandleMessage() {
 void WindowCaptureCallback::ContextData::singlePBO(osg::GLBufferObject::Extensions* ext) {  
     int width = 0, height = 0;
     getSize(_gc, width, height);
-    const int byteSize = width * height * 4;   
+    const int byteSize = width * height * (_pixelFormat == GL_BGRA ? 4 : 3);   
     GLuint& pbo = _pboBuffer[0];
     if (width!=_width || _height!=height) {
         _width = width;
@@ -372,7 +368,7 @@ void WindowCaptureCallback::ContextData::singlePBO(osg::GLBufferObject::Extensio
         tjCompress2(tj,
             (unsigned char*) src,
             width,
-            tjPixelSize[TJPF_RGBA] * width,
+            width * (_pixelFormat == GL_BGRA ? tjPixelSize[TJPF_RGBA] : tjPixelSize[TJPF_RGB]),
             height,
             TJPF_BGRA,
             (unsigned char **) &out,
@@ -396,7 +392,7 @@ void WindowCaptureCallback::ContextData::multiPBO(osg::GLBufferObject::Extension
     getSize(_gc, width, height);
     GLuint& copy_pbo = _pboBuffer[_currentPboIndex];
     GLuint& read_pbo = _pboBuffer[nextPboIndex];
-    const int byteSize = width * height * 4;
+    const int byteSize = width * height * (_pixelFormat == GL_BGRA ? 4 : 3);   
     if (width!=_width || _height!=height) {
         _width = width;
         _height = height;
@@ -433,7 +429,7 @@ void WindowCaptureCallback::ContextData::multiPBO(osg::GLBufferObject::Extension
         tjCompress2(tj,
         (unsigned char*) src,
             width,
-            tjPixelSize[TJPF_RGBA] * width,
+            width  * (_pixelFormat == GL_BGRA ? tjPixelSize[TJPF_RGBA] : tjPixelSize[TJPF_RGB]),
             height,
             TJPF_BGRA,
             (unsigned char **) &out,
@@ -563,6 +559,9 @@ int main(int argc, char** argv)
         keyswitchManipulator->addMatrixManipulator( '2', "Flight", new osgGA::FlightManipulator() );
         keyswitchManipulator->addMatrixManipulator( '3', "Drive", new osgGA::DriveManipulator() );
         keyswitchManipulator->addMatrixManipulator( '4', "Terrain", new osgGA::TerrainManipulator() );
+        keyswitchManipulator->addMatrixManipulator( '5', "Orbit", new osgGA::OrbitManipulator() );
+        keyswitchManipulator->addMatrixManipulator( '6', "FirstPerson", new osgGA::FirstPersonManipulator() );
+        keyswitchManipulator->addMatrixManipulator( '7', "Spherical", new osgGA::SphericalManipulator() );
 
         std::string pathfile;
         char keyForAnimationPath = '5';
@@ -581,7 +580,9 @@ int main(int argc, char** argv)
         viewer.setCameraManipulator( keyswitchManipulator.get() );
     }
 
-  
+    // add the state manipulator
+    viewer.addEventHandler(new osgGA::StateSetManipulator(viewer.getCamera()->getOrCreateStateSet()));
+
     // add the thread model handler
     viewer.addEventHandler(new osgViewer::ThreadingHandler);
 
@@ -602,7 +603,6 @@ int main(int argc, char** argv)
 
    
     GLenum readBuffer = GL_BACK;
-    WindowCaptureCallback::FramePosition position = WindowCaptureCallback::END_FRAME;
     WindowCaptureCallback::Mode mode = WindowCaptureCallback::DOUBLE_PBO;
 
     while (arguments.read("--single-pbo")) mode = WindowCaptureCallback::SINGLE_PBO;
@@ -698,7 +698,7 @@ int main(int argc, char** argv)
         GLenum buffer = pbuffer->getTraits()->doubleBuffer ? GL_BACK : GL_FRONT;
         camera->setDrawBuffer(buffer);
         camera->setReadBuffer(buffer);
-        camera->setFinalDrawCallback(new WindowCaptureCallback(mode, position, readBuffer));
+        camera->setFinalDrawCallback(new WindowCaptureCallback(mode, readBuffer));
         camera->setProjectionResizePolicy(osg::Camera::VERTICAL);
         camera->setProjectionMatrixAsPerspective(30.0f, static_cast<double>(width)/static_cast<double>(height), 1.0f, 10000.0f);
         viewer.realize();
@@ -707,11 +707,9 @@ int main(int argc, char** argv)
    
     //required to make sending events work in offscreen pbo-only mode!
     viewer.getEventQueue()->windowResize(0, 0, width, height);
-    // add the state manipulator
-    stateManipulator = new osgGA::StateSetManipulator(viewer.getCamera()->getOrCreateStateSet());
-    viewer.addEventHandler(stateManipulator.get());
-    
    
+    
+    
     using namespace chrono;
     const microseconds T(int(1E6/60.0));
     while(!END) {
@@ -728,6 +726,7 @@ int main(int argc, char** argv)
 #endif                                
         std::this_thread::sleep_for(
             max(duration_values< microseconds >::zero(), T - E));
+        END = true;
     }
     is.wait();
     return 0;
