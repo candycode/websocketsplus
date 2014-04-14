@@ -61,18 +61,17 @@ public:
     ServiceData& GetServiceData() { return serviceData_; }
     /// Return constant reference to ServiceData instance: this is what
     /// services use to access data
-    ServiceData GetServiceDataSync() const { 
+    void GetServiceDataSync(ServiceData& sd) const { 
         std::lock_guard< std::mutex > guard(mutex_);
-        return ServiceData(serviceData_); 
+        sd = serviceData_; 
     }
      /// Return constant reference to ServiceData instance: this is what
     /// services use to access data
-    ServiceData GetServiceDataTrySync() const { 
-        if(mutex_.try_lock()) return ServiceData(serviceData_); 
-        else return ServiceData();
+    bool GetServiceDataTrySync(ServiceData& sd) const { 
+        if(mutex_.try_lock()) return false; 
+        sd = serviceData_;
+        return true;
     }
-    /// Return non-const reference to data @todo remove
-    ServiceData& GetServiceDataSync() { return serviceData_; }
     /// Set service data: this is used by business logic to make data
     /// available to services
     void SetServiceData(const ServiceData& sd) {
@@ -91,11 +90,19 @@ public:
         std::lock_guard< std::mutex > guard(mutex_);
         SetServiceData(std::move(sd));
     }
-    void SetServiceDataTrySync(const ServiceData& sd) {
-        if(mutex_.try_lock()) SetServiceData(sd);
+    bool SetServiceDataTrySync(const ServiceData& sd) {
+        if(mutex_.try_lock()) {
+            SetServiceData(sd);
+            return true;
+        }
+        return false;
     }
-    void SetServiceDataTrySync(ServiceData&& sd) {
-        if(mutex_.try_lock()) SetServiceData(std::move(sd));
+    bool SetServiceDataTrySync(ServiceData&& sd) {
+        if(mutex_.try_lock()) {
+            SetServiceData(std::move(sd));
+            return true;
+        }
+        return false;
     }
 public:
     /// Return reference to buffer

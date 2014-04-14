@@ -119,7 +119,7 @@ private:
     struct Deleter : UserDataDeleter {
         ///Destroy instance with @c delete
         void Destroy() {
-            delete d;
+            if(erase_) delete d;
         }
         ///Constructor
         /// @param c pointer to allocated memory

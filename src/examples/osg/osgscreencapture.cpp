@@ -271,11 +271,10 @@ using ImagePtr = shared_ptr< char >;
 template < typename T >
 class SyncQueue {
 public:    
-    T Get() {
+    void Get(T& v) {
         std::lock_guard< std::mutex > guard(mutex_);
-        const T d(q_.front());
+        v = move(q_.front());
         q_.pop_front();
-        return d; 
     }
     void Put(T&& d) {
         std::lock_guard< std::mutex > guard(mutex_);
@@ -307,7 +306,9 @@ int cs = TJSAMP_444;
 int quality = 50;
 void HandleMessage() {
     if(!msgQueue.Empty()) {
-        Msg msg(msgQueue.Get());
+        std::vector< char > v;
+        msgQueue.Get(v);
+        Msg msg(move(v));
         switch(msg.type) {
         case 1: {
             mousebutton(0, 0, msg.x, msg.y );
@@ -506,7 +507,7 @@ private:
                 return;
             }
         }
-        img_ = ctx_->GetServiceDataSync();
+        ctx_->GetServiceDataSync(img_);
         df_.bufferBegin = img_.image.get();
         df_.bufferEnd = df_.bufferBegin + img_.size;
         df_.frameBegin = df_.bufferBegin;
@@ -612,7 +613,7 @@ int main(int argc, char** argv)
     
     unsigned int width=1440;
     unsigned int height=900;
-    arguments.read("--ss", width, height);
+    arguments.read("--view-size", width, height);
     osg::ref_ptr<osg::GraphicsContext> pbuffer;
     osg::ref_ptr<osg::GraphicsContext::Traits> traits = new osg::GraphicsContext::Traits;
     traits->x = 0;
