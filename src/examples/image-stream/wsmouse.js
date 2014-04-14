@@ -1,9 +1,10 @@
-var MOUSE_DOWN = 1, MOUSE_UP = 2, MOUSE_MOVE = 3;
+var MOUSE_DOWN = 1, MOUSE_UP = 2, MOUSE_MOVE = 3, KEY = 4;
+
 var sendBuffer = new Int32Array(3);   
 var mouseDown = false;
 var count = 4; //use this to send only 1/4 of the move events, makes it
                //more responsive
-var TOUCH_EVENTS = true;
+var TOUCH_EVENTS = false;
 // function getPos(e) {
 //   e = e || window.event;
 //   var docEl = document.documentElement;
@@ -30,6 +31,20 @@ function sendMouseEvent(m, e) {
   websocket.send(sendBuffer);
   //if(m == MOUSE_MOVE) count = 4;
 }
+
+function sendKeyEvent(e) {
+  //alert(e.keyCode);
+  e = e || window.event;
+  sendBuffer[0] = KEY;
+  sendBuffer[1] = e.keyCode || e.charCode;
+  sendBuffer[2] = -1; // will use for shiftKey etc.
+  websocket.send(sendBuffer);
+}
+
+window.onkeydown = sendKeyEvent;
+
+//window.onkeypress = sendKeyEvent;
+
 window.onmousedown = function(e) {
   e.preventDefault();
   mouseDown = true;
