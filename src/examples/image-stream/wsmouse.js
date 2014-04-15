@@ -111,6 +111,7 @@ function handleCancel(e) {
 }
 
 window.addEventListener("mousewheel", MouseWheelHandler);
+window.addEventListener("DOMMouseScroll", MouseWheelHandler);
 window.addEventListener("contextmenu", window.onmousedown);
 
 if(TOUCH_EVENTS) {

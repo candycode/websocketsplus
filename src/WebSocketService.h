@@ -446,8 +446,8 @@ private:
                           bytesToWrite, //<= chunkSize
                           libwebsocket_write_protocol(writeMode));
             }
-            if(bytesWritten < 0) 
-                throw std::runtime_error("Send error");
+            if(bytesWritten < 0) break;
+               //throw std::runtime_error("Send error");
             else {
                 s->UpdateOutBuffer(bytesWritten);
             }
