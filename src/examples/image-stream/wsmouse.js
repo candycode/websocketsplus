@@ -1,8 +1,9 @@
-var MOUSE_DOWN = 1, MOUSE_UP = 2, MOUSE_MOVE = 3, KEY = 4;
+var MOUSE_DOWN = 1, MOUSE_UP = 2, MOUSE_MOVE = 3, KEY = 4,
+    MOUSE_WHEEL = 5;
 
-var sendBuffer = new Int32Array(3);   
+var sendBuffer = new Int32Array(4);   
 var mouseDown = false;
-var count = 4; //use this to send only 1/4 of the move events, makes it
+//var count = 4; //use this to send only 1/4 of the move events, makes it
                //more responsive
 var TOUCH_EVENTS = false;
 // function getPos(e) {
@@ -21,7 +22,12 @@ function sendMouseEvent(m, e) {
   sendBuffer[0] = m;
   sendBuffer[1] = e.clientX;
   sendBuffer[2] = e.clientY;
-  
+  var b = 0;
+  if(e.button == 0) b = 0;
+  else if(e.button == 1) b = 1;
+  else if(e.button == 2) b = 4;
+  sendBuffer[3] = b;
+
   // if(!websocket || websocket.readyState != websocket.open) {
   //   console.log(sendBuffer[0] + " " +
   //               sendBuffer[1] + " " +
@@ -36,7 +42,7 @@ function sendMouseEvent(m, e) {
 //http://www.javascriptkit.com/jsref/eventkeyboardmouse.shtml
 function sendKeyEvent(e) {
   //alert(e.keyCode);
-  e = e || window.event;
+  e = window.event || e;
   sendBuffer[0] = KEY;
   sendBuffer[1] = e.keyCode || e.charCode;
   var k = 0;
@@ -67,6 +73,23 @@ window.onmousemove = function(e) {
   sendMouseEvent(MOUSE_MOVE, e);                    
 }
 
+function MouseWheelHandler(e) {
+  // cross-browser wheel delta
+  var e = window.event || e; // old IE support
+  e.preventDefault();
+  var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));
+  sendBuffer[0] = MOUSE_WHEEL;
+  sendBuffer[1] = e.clientX;
+  sendBuffer[2] = e.clientY;
+  sendBuffer[3] = delta;
+  websocket.send(sendBuffer);
+  return false;
+}
+
+window.onmousewheel = MouseWheelHandler;
+
+window.contextmenu = window.onmousedown;
+
 function handleStart(e) {
   //document.querySelector("#pos").textContent = e.touches.length;
   e.preventDefault();
@@ -86,6 +109,10 @@ function handleMove(e) {
 function handleCancel(e) {
   e.preventDefault();  
 }
+
+window.addEventListener("mousewheel", MouseWheelHandler);
+window.addEventListener("contextmenu", window.onmousedown);
+
 if(TOUCH_EVENTS) {
   window.addEventListener("touchstart", handleStart, false);
   window.addEventListener("touchend", handleEnd, false);
