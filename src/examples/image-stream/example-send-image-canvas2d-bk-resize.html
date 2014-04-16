@@ -57,13 +57,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var context = canvas.getContext('2d');
               var maintainAspectRatio = true;
               var ratio = 1080 / 1920;
-              
-              //canvas.width = WIDTH;
-              //canvas.height = HEIGHT;
-              context.fillStyle = "grey";
-              context.fillRect(0,0,WIDTH,HEIGHT);
-               
+
+              while(eventScriptLoaded == undefined);
+              initEvents(canvas);
+            
+              //resize canvas accordingly; the right way to resize the 3d view
+              //is oto send a resize event to the service and get back a
+              //properly formatted image            
               img.onload = function() {
+                canvas.width = canvas.width 
+                  == img.width ? canvas.width : img.width;
+                canvas.height = canvas.height
+                  == img.height ? canvas.height : img.height;
                 context.drawImage(img, 0, 0);
               }  
               var proto = location.protocol;
@@ -74,27 +79,35 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               websocket.binaryType = "arraybuffer";
              
 
-              function resizeCanvas() {
-                var width = window.innerWidth;
-                var height = window.innerHeight;
+              // function resizeCanvas() {
+              //   var width = img.width;
+              //   var height = img.height;
+              //   canvas.height = height;
+              //   canvas.width = width;    
 
-
-                if(width > height) {
-                  canvas.height = height;
-                  canvas.width = height / ratio;
+              //   // if(width > height) {
+              //   //   canvas.height = height;
+              //   //   canvas.width = height / ratio;
                  
-                } else {
-                  canvas.width = width;
-                  canvas.height = width * ratio;
-                }
-                canvas.height = width * ratio;
-                canvas.width = width;  
-                var w = canvas.width / WIDTH;
-                var h = canvas.height / HEIGHT;     
-                context.scale(w, h);
-                //alert(w + " " + h + " " + (width / WIDTH));
+              //   // } else {
+              //   //   canvas.width = width;
+              //   //   canvas.height = width * ratio;
+              //   // }
+              //   // canvas.height = width * ratio;
+              //   // canvas.width = width;  
+              //   // var w = canvas.width / WIDTH;
+              //   // var h = canvas.height / HEIGHT;     
+              //   // context.scale(w, h);
+              // }
+              function positionCanvas() {
+                  var l = (window.innerWidth - canvas.width) / 2;
+                  var t = (window.innerHeight - canvas.height) / 2;
+                  if(l >= 0)
+                    canvas.style.left = l + "px";  
+                  if(t >= 0)
+                    canvas.style.top = t + "px";  
               }
-              window.addEventListener('resize', resizeCanvas, true);  
+              window.addEventListener('resize', positionCanvas, true);  
 
               websocket.onopen = function () {
                   $('h1').css('color', 'green');
@@ -123,8 +136,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 if(!imageUrl) return;
                 img.src = imageUrl;
               };
-              resizeCanvas();
-
            });
        </script>
         <style>
@@ -139,15 +150,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
        </style>
        </head>
    <body>
-    <div style="color: red; font-size: 200%">
-       <h1>WebSockets stream test</h1>
-       <div>Frame/s: <span name="output"></span></div>
-       <div>Size: <span name="bytes"></span> bytes</div>
-       <div><!--width="1920" height="1080"-->
-    </div>
+    <div style="margin-left: auto; margin-right: auto">
+      <canvas id="canvas" 
+       style="z-index: -1; position: absolute; top: 0; left: 0">
+      </canvas>
+      <div id="gui"
+           style="color: red; font-size: 200%; position: absolute; top: 0">
+         <h1>WebSockets stream test</h1>
+         <div>Frame/s: <span name="output"></span></div>
+         <div>Size: <span name="bytes"></span> bytes</div>
+      </div>
+      
+    </div>            
 
-    <canvas id="canvas" 
-                style="z-index: -1;position:fixed; top:0;left:0"></canvas></div>            
    </body>
 </html>
 

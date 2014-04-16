@@ -1,3 +1,5 @@
+function initEvents(gui) {
+
 var MOUSE_DOWN = 1, MOUSE_UP = 2, MOUSE_MOVE = 3, KEY = 4,
     MOUSE_WHEEL = 5;
 
@@ -15,13 +17,23 @@ var TOUCH_EVENTS = false;
 //   y = e.pageY || (e.clientY  + scrollTop);
 // }​
 
+function getPos(e) {
+  var e = window.e || e;
+  var rect = gui.getBoundingClientRect();
+  return {x: e.clientX - rect.left,
+          y: e.clientY - rect.top};
+  
+}
+
+
 function sendMouseEvent(m, e) {
   //e.preventDefault();
   //if(m == MOUSE_MOVE) if(--count > 0) return;
   e = e || window.event;
+  var p = getPos(e);
   sendBuffer[0] = m;
-  sendBuffer[1] = e.clientX;
-  sendBuffer[2] = e.clientY;
+  sendBuffer[1] = p.x;
+  sendBuffer[2] = p.y;
   var b = 0;
   if(e.button == 0) b = 0;
   else if(e.button == 1) b = 1;
@@ -57,12 +69,23 @@ window.onkeydown = sendKeyEvent;
 
 //window.onkeypress = sendKeyEvent;
 
+function valid(e) {
+  var rect = gui.getBoundingClientRect();
+  return (window.e || e) 
+         && e.clientX < rect.right && e.clientX > rect.left  
+         && e.clientY > rect.top && e.clientY < rect.bottom;  
+} 
+
+
+
 window.onmousedown = function(e) {
+  if(!valid(e)) return true;
   e.preventDefault();
   mouseDown = true;
   sendMouseEvent(MOUSE_DOWN, e);                    
 }
 window.onmouseup = function(e) {
+  if(!valid(e)) return true;
   e.preventDefault();
   mouseDown = false;
   sendMouseEvent(MOUSE_UP, e);                    
@@ -122,4 +145,6 @@ if(TOUCH_EVENTS) {
   window.addEventListener("touchmove", handleMove, false);
 }
 
+}
 
+eventScriptLoaded = true;

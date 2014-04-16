@@ -98,6 +98,8 @@ osgViewer::Viewer* v = nullptr;
 int cs = TJSAMP_444;
 int quality = 75;
 shared_ptr< wsp::Context< Image > > context(new wsp::Context< Image >);
+bool moving = false;
+int sendFrame = 2;
 //------------------------------------------------------------------------------
 struct Msg {
     Msg(vector< char >&& d) {
@@ -156,7 +158,9 @@ void keyevent(int k) {
         END = true;
         return;
     }
+    sendFrame = 3;
     v->getEventQueue()->keyPress((osgGA::GUIEventAdapter::KeySymbol) k);
+   
 }
 void wheelevent(const Msg& m) {
     float delta = m.delta;
@@ -191,11 +195,9 @@ void HandleMessage() {
         break;
         case 2: {
             mousebutton(msg.buttons, 1, msg.x, msg.y );
-            //quality = 75;
         }
         case 3: {
             mousemove(msg.x,msg.y);
-            //quality = 15;
         }
         case 4: {
             keyevent(msg.key); 
@@ -214,43 +216,43 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
         enum Mode { SINGLE_PBO, DOUBLE_PBO, TRIPLE_PBO };       
         struct ContextData : public osg::Referenced {
             ContextData(osg::GraphicsContext* gc, Mode mode, GLenum readBuffer):
-                _gc(gc),
-                _mode(mode),
-                _readBuffer(readBuffer),
-                _pixelFormat(GL_BGRA),
-                _type(GL_UNSIGNED_BYTE),
-                _width(0),
-                _height(0),
-                _currentPboIndex(0),
-                tj(tjhandle()) {
+                gc_(gc),
+                mode_(mode),
+                readBuffer_(readBuffer),
+                pixelFormat_(GL_BGRA),
+                type_(GL_UNSIGNED_BYTE),
+                width_(0),
+                height_(0),
+                currentPboIndex_(0),
+                tj_(tjhandle()) {
                 if (gc && gc->getTraits()) {
                     if (gc->getTraits()->alpha) {
-                        _pixelFormat = GL_BGRA;
+                        pixelFormat_ = GL_BGRA;
                     }
                     else {
-                        _pixelFormat = GL_BGR; 
+                        pixelFormat_ = GL_BGR; 
                     }
                 }
-                _width = gc->getTraits()->width;
-                _height = gc->getTraits()->height;
+                width_ = gc->getTraits()->width;
+                height_ = gc->getTraits()->height;
                 // double buffer PBO.
-                switch(_mode) {
+                switch(mode_) {
                     case(SINGLE_PBO):
-                        _pboBuffer.push_back(0);
+                        pboBuffer_.push_back(0);
                         break;
                     case(DOUBLE_PBO):
-                        _pboBuffer.push_back(0);
-                        _pboBuffer.push_back(0);
+                        pboBuffer_.push_back(0);
+                        pboBuffer_.push_back(0);
                         break;
                     case(TRIPLE_PBO):
-                        _pboBuffer.push_back(0);
-                        _pboBuffer.push_back(0);
-                        _pboBuffer.push_back(0);
+                        pboBuffer_.push_back(0);
+                        pboBuffer_.push_back(0);
+                        pboBuffer_.push_back(0);
                         break;
                     default:
                         break;
                 }
-                 tj = tjInitCompress();
+                 tj_ = tjInitCompress();
             }
             void getSize(osg::GraphicsContext* gc, int& width, int& height) {
                 if (gc->getTraits()) {
@@ -259,11 +261,12 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
                 }
             }
             void read() {
+                if(!sendFrame) return;
                 osg::GLBufferObject::Extensions* ext =
-                    osg::GLBufferObject::getExtensions(_gc->getState()
+                    osg::GLBufferObject::getExtensions(gc_->getState()
                         ->getContextID(), true);
-                if (ext->isPBOSupported() && !_pboBuffer.empty()) {
-                    if (_pboBuffer.size()==1) {
+                if (ext->isPBOSupported() && !pboBuffer_.empty()) {
+                    if (pboBuffer_.size()==1) {
                         singlePBO(ext);
                     }
                     else {
@@ -274,26 +277,26 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
             void singlePBO(osg::GLBufferObject::Extensions* ext);
             void multiPBO(osg::GLBufferObject::Extensions* ext);
             ~ContextData() {
-                tjDestroy(tj);
+                tjDestroy(tj_);
             }            
             typedef std::vector< GLuint > PBOBuffer;
-            osg::GraphicsContext*   _gc;
-            Mode                    _mode;
-            GLenum                  _readBuffer;
-            GLenum                  _pixelFormat;
-            GLenum                  _type;
-            int                     _width;
-            int                     _height;         
-            unsigned int            _currentPboIndex;
-            PBOBuffer               _pboBuffer;
-            tjhandle                tj;
+            osg::GraphicsContext*   gc_;
+            Mode                    mode_;
+            GLenum                  readBuffer_;
+            GLenum                  pixelFormat_;
+            GLenum                  type_;
+            int                     width_;
+            int                     height_;         
+            unsigned int            currentPboIndex_;
+            PBOBuffer               pboBuffer_;
+            tjhandle                tj_;
         };
         
         WindowCaptureCallback(Mode mode, GLenum readBuffer):
-            _mode(mode),
-            _readBuffer(readBuffer) {}  
+            mode_(mode),
+            readBuffer_(readBuffer) {}  
         ContextData* createContextData(osg::GraphicsContext* gc) const {
-            return new ContextData(gc, _mode, _readBuffer);
+            return new ContextData(gc, mode_, readBuffer_);
         }
         ContextData* getContextData(osg::GraphicsContext* gc) const {
             OpenThreads::ScopedLock<OpenThreads::Mutex> lock(_mutex);
@@ -303,7 +306,7 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
             return data.get();
         }
         virtual void operator () (osg::RenderInfo& renderInfo) const {
-            glReadBuffer(_readBuffer);
+            glReadBuffer(readBuffer_);
             osg::GraphicsContext* gc = 
                 renderInfo.getState()->getGraphicsContext();
             osg::ref_ptr<ContextData> cd = getContextData(gc);
@@ -312,8 +315,8 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
 private:        
         typedef std::map< osg::GraphicsContext*, osg::ref_ptr< ContextData > >
             ContextDataMap;
-        Mode                        _mode;     
-        GLenum                      _readBuffer;
+        Mode                        mode_;     
+        GLenum                      readBuffer_;
         mutable OpenThreads::Mutex  _mutex;
         mutable ContextDataMap      _contextDataMap;
 };
@@ -321,12 +324,12 @@ private:
 void WindowCaptureCallback::ContextData::singlePBO(
                                         osg::GLBufferObject::Extensions* ext) {  
     int width = 0, height = 0;
-    getSize(_gc, width, height);
-    const int byteSize = width * height * (_pixelFormat == GL_BGRA ? 4 : 3);   
-    GLuint& pbo = _pboBuffer[0];
-    if (width!=_width || _height!=height) {
-        _width = width;
-        _height = height;
+    getSize(gc_, width, height);
+    const int byteSize = width * height * (pixelFormat_ == GL_BGRA ? 4 : 3);   
+    GLuint& pbo = pboBuffer_[0];
+    if (width!=width_ || height_!=height) {
+        width_ = width;
+        height_ = height;
          if(pbo != 0)  { ext->glDeleteBuffers (1, &pbo); pbo = 0; }
          if (pbo==0) {
             ext->glGenBuffers(1, &pbo);
@@ -346,20 +349,20 @@ void WindowCaptureCallback::ContextData::singlePBO(
         ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
     }
 
-    glReadPixels(0, 0, _width, _height, _pixelFormat, _type, 0);
+    glReadPixels(0, 0, width_, height_, pixelFormat_, type_, 0);
     GLubyte* src = (GLubyte*)ext->glMapBuffer(GL_PIXEL_PACK_BUFFER_ARB,
                                               GL_READ_ONLY_ARB);
     if(src) {
         static int count = 0;
         char* out = nullptr;
         unsigned long size = 0;
-        tjCompress2(tj,
+        tjCompress2(tj_,
             (unsigned char*) src,
             width,
-            width * (_pixelFormat == GL_BGRA ? tjPixelSize[TJPF_RGBA] 
+            width * (pixelFormat_ == GL_BGRA ? tjPixelSize[TJPF_RGBA] 
                                              : tjPixelSize[TJPF_RGB]),
             height,
-            TJPF_BGRA,
+            pixelFormat_ == GL_BGRA ? TJPF_BGRA : TJPF_BGR,
             (unsigned char **) &out,
             &size,
             cs, //444=best quality,
@@ -377,15 +380,15 @@ void WindowCaptureCallback::ContextData::singlePBO(
 
 void WindowCaptureCallback::ContextData::multiPBO(
                                         osg::GLBufferObject::Extensions* ext) {
-    unsigned int nextPboIndex = (_currentPboIndex+1)%_pboBuffer.size();
+    unsigned int nextPboIndex = (currentPboIndex_+1) % pboBuffer_.size();
     int width=0, height=0;
-    getSize(_gc, width, height);
-    GLuint& copy_pbo = _pboBuffer[_currentPboIndex];
-    GLuint& read_pbo = _pboBuffer[nextPboIndex];
-    const int byteSize = width * height * (_pixelFormat == GL_BGRA ? 4 : 3);   
-    if (width!=_width || _height!=height) {
-        _width = width;
-        _height = height;
+    getSize(gc_, width, height);
+    GLuint& copy_pbo = pboBuffer_[currentPboIndex_];
+    GLuint& read_pbo = pboBuffer_[nextPboIndex];
+    const int byteSize = width * height * (pixelFormat_ == GL_BGRA ? 4 : 3);   
+    if (width!=width_ || height_!=height) {
+        width_ = width;
+        height_ = height;
         if(read_pbo != 0) ext->glDeleteBuffers (1, &read_pbo);
         ext->glGenBuffers(1, &read_pbo);
         ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, read_pbo);
@@ -412,35 +415,69 @@ void WindowCaptureCallback::ContextData::multiPBO(
     }
 
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, read_pbo); 
-    glReadPixels(0, 0, width, height, _pixelFormat, _type, 0);
+    glReadPixels(0, 0, width, height, pixelFormat_, type_, 0);
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, copy_pbo);
     GLubyte* src = (GLubyte*)ext->glMapBuffer(GL_PIXEL_PACK_BUFFER_ARB,
                                               GL_READ_ONLY_ARB);
+#ifdef JPG_OWN_THREAD //creating one thread every time, use Executor instead 
+    static future< void > jpg;
+    static bool first = true;
+    static vector< unsigned char > b;
+#endif    
     if(src) {
         static int count = 0;
         char* out = nullptr;
         unsigned long size = 0;
-        tjCompress2(tj,
-        (unsigned char*) src,
+#ifdef  JPG_OWN_THREAD      
+        if(first) first = false;
+        else jpg.wait();
+        b.resize(byteSize);
+        b.assign(src, src + byteSize);        
+        jpg = async(launch::async, [this, ext, &out, width, height]() {
+            unsigned long size = 0;
+            tjCompress2(tj_,
+            (unsigned char*) &b[0],
+                width,
+                width  * (pixelFormat_ == GL_BGRA ? tjPixelSize[TJPF_RGBA]
+                                                  : tjPixelSize[TJPF_RGB]),
+                height,
+                pixelFormat_ == GL_BGRA ? TJPF_BGRA : TJPF_BGR,
+                (unsigned char **) &out,
+                &size,
+                cs, //444=best quality,
+                    //420=fast and still unnoticeable but MIGHT NOT WORK
+                    //IN SOME BROWSERS
+                quality,
+                TJXOP_VFLIP);           
+           
+            context->SetServiceDataSync(
+                          Image(ImagePtr((char*) out, TJDeleter()), size,
+                                         count++));
+            
+        });
+#else
+        tjCompress2(tj_,
+            (unsigned char*) src,
             width,
-            width  * (_pixelFormat == GL_BGRA ? tjPixelSize[TJPF_RGBA]
-                                              : tjPixelSize[TJPF_RGB]),
+            width * (pixelFormat_ == GL_BGRA ? tjPixelSize[TJPF_RGBA] 
+                                             : tjPixelSize[TJPF_RGB]),
             height,
-            TJPF_BGRA,
+            pixelFormat_ == GL_BGRA ? TJPF_BGRA : TJPF_BGR,
             (unsigned char **) &out,
             &size,
             cs, //444=best quality,
-                //420=fast and still unnoticeable but MIGHT NOT WORK
-                //IN SOME BROWSERS
+                        //420=fast and still unnoticeable but MIGHT NOT WORK
+                        //IN SOME BROWSERS
             quality,
-            TJXOP_VFLIP );    
-        
+            TJXOP_VFLIP);    
+#endif        
         ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
         context->SetServiceDataSync(
-                      Image(ImagePtr((char*) out, TJDeleter()), size, count++));
+                          Image(ImagePtr((char*) out, TJDeleter()), size,
+                                         count++));
     }
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
-    _currentPboIndex = nextPboIndex;
+    currentPboIndex_ = nextPboIndex;
 }
 
 //------------------------------------------------------------------------------
@@ -489,7 +526,7 @@ public:
     std::chrono::duration< double > 
     MinDelayBetweenWrites() const {
         //use 0.0
-        return std::chrono::duration< double >(0.001);
+        return std::chrono::duration< double >(0.0);
     }
 private:
     void InitDataFrame() const {
@@ -691,6 +728,43 @@ int main(int argc, char** argv)
     //required to make sending events work in offscreen pbo-only mode!
     viewer.getEventQueue()->windowResize(0, 0, width, height);  
     
+
+class CameraUpdateCallback : public osg::NodeCallback
+{
+public:
+    CameraUpdateCallback(int& q, int& s) : quality_(q), sendFrame_(s) {}
+     virtual void operator()(osg::Node* node, osg::NodeVisitor* nv) {
+         //std::cout<<"Camera update callback - pre traverse"<<node<<std::endl;
+        traverse(node,nv);
+        osg::Camera* c = (osg::Camera*) node;
+        if(c->getViewMatrix() != d) {
+            int& q = quality;
+            q = minQuality_;
+            int& s = sendFrame_;
+            s = 2;
+            d = c->getViewMatrix();
+        } else {
+            int& q = quality;
+            q = maxQuality_;
+            int& s = sendFrame_;
+            if(s > 0) --s;
+        }
+         //std::cout<<"Camera update callback - post traverse"<<node<<std::endl;
+     }
+private:
+     osg::Matrixd d;
+     int minQuality_ = 10;
+     int maxQuality_ = 80;
+     reference_wrapper< int > quality_;
+     reference_wrapper< int > sendFrame_;
+ };
+ 
+
+viewer.getCamera()->setUpdateCallback(
+                                    new CameraUpdateCallback(quality,
+                                                             sendFrame));
+//viewer.getCamera()->setClearColor(osg::Vec4(0, 0, 0, 0));
+
     using namespace chrono;
     const microseconds T(int(1E6/60.0));
     while(!END) {
