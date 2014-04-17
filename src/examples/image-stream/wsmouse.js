@@ -1,21 +1,13 @@
 function initEvents(gui) {
 
 var MOUSE_DOWN = 1, MOUSE_UP = 2, MOUSE_MOVE = 3, KEY = 4,
-    MOUSE_WHEEL = 5;
+    MOUSE_WHEEL = 5, RESIZE = 6;
 
 var sendBuffer = new Int32Array(4);   
 var mouseDown = false;
 //var count = 4; //use this to send only 1/4 of the move events, makes it
                //more responsive
 var TOUCH_EVENTS = false;
-// function getPos(e) {
-//   e = e || window.event;
-//   var docEl = document.documentElement;
-//   var scrollLeft = docEl.scrollLeft || document.body.scrollLeft;
-//   var scrollTop  = docEl.scrollTop || document.body.scrollTop;
-//   x = e.pageX || (e.clientX  + scrollLeft);
-//   y = e.pageY || (e.clientY  + scrollTop);
-// }​
 
 function getPos(e) {
   var e = window.e || e;
@@ -24,7 +16,6 @@ function getPos(e) {
           y: e.clientY - rect.top};
   
 }
-
 
 function sendMouseEvent(m, e) {
   //e.preventDefault();
@@ -65,6 +56,13 @@ function sendKeyEvent(e) {
   websocket.send(sendBuffer);
 }
 
+window.sendResizeEvent = function(w, h) {
+  sendBuffer[0] = RESIZE;
+  sendBuffer[1] = w;
+  sendBuffer[2] = h;
+  websocket.send(sendBuffer);
+}
+
 window.onkeydown = sendKeyEvent;
 
 //window.onkeypress = sendKeyEvent;
@@ -75,7 +73,6 @@ function valid(e) {
          && e.clientX < rect.right && e.clientX > rect.left  
          && e.clientY > rect.top && e.clientY < rect.bottom;  
 } 
-
 
 
 window.onmousedown = function(e) {
@@ -114,7 +111,6 @@ window.onmousewheel = MouseWheelHandler;
 window.contextmenu = window.onmousedown;
 
 function handleStart(e) {
-  //document.querySelector("#pos").textContent = e.touches.length;
   e.preventDefault();
   sendMouseEvent(MOUSE_DOWN, e.touches[e.touches.length - 1]);    
 }

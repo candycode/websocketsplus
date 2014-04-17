@@ -116,6 +116,9 @@ struct Msg {
             x = p[1];
             y = p[2];
             delta = p[3];
+        } else if(ResizeEvent(type)) {
+            x = p[1];
+            y = p[2];
         }
     }
     bool MouseEvent(int e) {
@@ -126,6 +129,9 @@ struct Msg {
     }
     bool WheelEvent(int e) {
         return e == 5;
+    }
+    bool ResizeEvent(int e) {
+        return e == 6;
     }
     int type = -1;
     int x = -1;
@@ -183,6 +189,14 @@ void wheelevent(const Msg& m) {
     v->getEventQueue()->addEvent(ea);
 }
 
+
+void resizeevent(int w, int h) {
+    sendFrame = 3;
+    v->getCamera()->getGraphicsContext()->resized(0, 0, w, h);      
+    //the following does not work!
+    //v->getEventQueue()->windowResize(0, 0, w, h); 
+}
+
 void HandleMessage() {
     if(!msgQueue.Empty()) {
         std::vector< char > v;
@@ -206,6 +220,11 @@ void HandleMessage() {
         case 5: {
             wheelevent(msg);
         }
+        break;
+        case 6: {
+            resizeevent(msg.x, msg.y);
+        }
+        break;
         default: break;          
         }
     }
@@ -233,8 +252,8 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
                         pixelFormat_ = GL_BGR; 
                     }
                 }
-                width_ = gc->getTraits()->width;
-                height_ = gc->getTraits()->height;
+                width_ = 0;//gc->getTraits()->width;
+                height_ = 0;// gc->getTraits()->height;
                 // double buffer PBO.
                 switch(mode_) {
                     case(SINGLE_PBO):
@@ -255,9 +274,9 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
                  tj_ = tjInitCompress();
             }
             void getSize(osg::GraphicsContext* gc, int& width, int& height) {
-                if (gc->getTraits()) {
-                    width = gc->getTraits()->width;
-                    height = gc->getTraits()->height;
+                if(gc->getTraits()) {
+                     width = gc->getTraits()->width;
+                     height = gc->getTraits()->height;
                 }
             }
             void read() {
@@ -383,37 +402,23 @@ void WindowCaptureCallback::ContextData::multiPBO(
     unsigned int nextPboIndex = (currentPboIndex_+1) % pboBuffer_.size();
     int width=0, height=0;
     getSize(gc_, width, height);
-    GLuint& copy_pbo = pboBuffer_[currentPboIndex_];
-    GLuint& read_pbo = pboBuffer_[nextPboIndex];
+    if(width < 1 || height < 1) return;
     const int byteSize = width * height * (pixelFormat_ == GL_BGRA ? 4 : 3);   
     if (width!=width_ || height_!=height) {
         width_ = width;
         height_ = height;
-        if(read_pbo != 0) ext->glDeleteBuffers (1, &read_pbo);
-        ext->glGenBuffers(1, &read_pbo);
-        ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, read_pbo);
-        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
-                          GL_STREAM_READ);
-        if(copy_pbo != 0) ext->glDeleteBuffers (1, &copy_pbo);
-        ext->glGenBuffers(1, &copy_pbo);
-        ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, copy_pbo);
-        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
-                          GL_STREAM_READ);
-    }
+        for(auto& i: pboBuffer_) {
+            if(i) ext->glDeleteBuffers (1, &i);
+            ext->glGenBuffers(1, &i);
+            ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, i);
+            ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
+                              GL_STREAM_READ);
 
-    if(copy_pbo == 0) {
-        ext->glGenBuffers(1, &copy_pbo);
-        ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, copy_pbo);
-        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
-                          GL_STREAM_READ);
+        }
+    
     }
-    if(read_pbo == 0) {
-        ext->glGenBuffers(1, &read_pbo);
-        ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, read_pbo);
-        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
-                          GL_STREAM_READ);
-    }
-
+    GLuint& copy_pbo = pboBuffer_[currentPboIndex_];
+    GLuint& read_pbo = pboBuffer_[nextPboIndex]; 
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, read_pbo); 
     glReadPixels(0, 0, width, height, pixelFormat_, type_, 0);
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, copy_pbo);
@@ -426,8 +431,8 @@ void WindowCaptureCallback::ContextData::multiPBO(
 #endif    
     if(src) {
         static int count = 0;
-        char* out = nullptr;
-        unsigned long size = 0;
+        unsigned long size = tjBufSize(width, height, cs);
+        char* out = (char*) tjAlloc(size);
 #ifdef  JPG_OWN_THREAD      
         if(first) first = false;
         else jpg.wait();
@@ -469,12 +474,13 @@ void WindowCaptureCallback::ContextData::multiPBO(
                         //420=fast and still unnoticeable but MIGHT NOT WORK
                         //IN SOME BROWSERS
             quality,
-            TJXOP_VFLIP);    
+            TJXOP_VFLIP | TJFLAG_FASTDCT);    
 #endif        
-        ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
+        
         context->SetServiceDataSync(
                           Image(ImagePtr((char*) out, TJDeleter()), size,
                                          count++));
+        ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
     }
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
     currentPboIndex_ = nextPboIndex;
@@ -616,8 +622,7 @@ int main(int argc, char** argv)
     // add the thread model handler
     viewer.addEventHandler(new osgViewer::ThreadingHandler);
 
-    // add the window size toggle handler
-    viewer.addEventHandler(new osgViewer::WindowSizeHandler);
+   
         
     // add the stats handler
     viewer.addEventHandler(new osgViewer::StatsHandler);
@@ -663,6 +668,8 @@ int main(int argc, char** argv)
     traits->sharedContext = 0;
     pbuffer = osg::GraphicsContext::createGraphicsContext(traits.get());
   
+     // add the window size toggle handler
+    //viewer.addEventHandler(new osgViewer::WindowSizeHandler);
     if(!pbuffer.valid()) {
         osg::notify(osg::FATAL)
             << "Pixel buffer has not been created successfully." <<std::endl;

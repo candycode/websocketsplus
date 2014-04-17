@@ -77,37 +77,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var WSURL = "ws://" + hostname + ":5000";
               websocket = new WebSocket(WSURL, 'image-stream');
               websocket.binaryType = "arraybuffer";
-             
-
-              // function resizeCanvas() {
-              //   var width = img.width;
-              //   var height = img.height;
-              //   canvas.height = height;
-              //   canvas.width = width;    
-
-              //   // if(width > height) {
-              //   //   canvas.height = height;
-              //   //   canvas.width = height / ratio;
-                 
-              //   // } else {
-              //   //   canvas.width = width;
-              //   //   canvas.height = width * ratio;
-              //   // }
-              //   // canvas.height = width * ratio;
-              //   // canvas.width = width;  
-              //   // var w = canvas.width / WIDTH;
-              //   // var h = canvas.height / HEIGHT;     
-              //   // context.scale(w, h);
-              // }
-              function positionCanvas() {
-                  var l = (window.innerWidth - canvas.width) / 2;
-                  var t = (window.innerHeight - canvas.height) / 2;
-                  if(l >= 0)
-                    canvas.style.left = l + "px";  
-                  if(t >= 0)
-                    canvas.style.top = t + "px";  
+              function resizeCanvas() {
+                  // var l = (window.innerWidth - canvas.width) / 2;
+                  // var t = (window.innerHeight - canvas.height) / 2;
+                  // if(l >= 0)
+                  //   canvas.style.left = l + "px";  
+                  // if(t >= 0)
+                  //   canvas.style.top = t + "px";  
+                  //sendResizeEvent is added to window from within the
+                  //initEvents function
+                  sendResizeEvent(window.innerWidth, window.innerHeight);
               }
-              window.addEventListener('resize', positionCanvas, true);  
+              window.addEventListener('resize',resizeCanvas, true);  
 
               websocket.onopen = function () {
                   $('h1').css('color', 'green');
@@ -136,7 +117,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 if(!imageUrl) return;
                 img.src = imageUrl;
               };
+              //resizeCanvas();
            });
+
        </script>
         <style>
        body{
