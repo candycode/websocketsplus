@@ -1,9 +1,10 @@
 function initEvents(gui) {
 
 var MOUSE_DOWN = 1, MOUSE_UP = 2, MOUSE_MOVE = 3, KEY = 4,
-    MOUSE_WHEEL = 5, RESIZE = 6;
+    MOUSE_WHEEL = 5, RESIZE = 6, TEXT = 7;
 
-var sendBuffer = new Int32Array(4);   
+var sendBuffer = new Int32Array(4);
+var textBuffer = new Int32Array(16);   
 var mouseDown = false;
 //var count = 4; //use this to send only 1/4 of the move events, makes it
                //more responsive
@@ -104,6 +105,24 @@ function MouseWheelHandler(e) {
   sendBuffer[3] = delta;
   websocket.send(sendBuffer);
   return false;
+}
+
+
+ window.sendFilePath = function(t) {
+  var s = Math.floor((t.length + 1) / 2) + 2;
+  if(textBuffer.length < s)
+     textBuffer = new Int32Array(s);
+  textBuffer[0] = TEXT;
+  textBuffer[1] = t.length;
+  var j = 2;
+  for(var i = 0; i < t.length; i += 2) {
+    textBuffer[j] = t.charCodeAt(i);
+    textBuffer[j] = textBuffer[j] | (t.charCodeAt(i + 1) << 16);
+    ++j;
+  }
+  if(Math.floor(t.length % 2) != 0) textBuffer[s - 1] 
+     = t.charCodeAt(t.length - 1);
+  websocket.send(textBuffer);
 }
 
 window.onmousewheel = MouseWheelHandler;

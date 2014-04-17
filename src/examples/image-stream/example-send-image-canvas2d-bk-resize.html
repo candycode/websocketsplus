@@ -62,6 +62,45 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               initEvents(canvas);
             
               
+              //WARNING: ALL FILE INPUT OPERATIONS ONLY RETURN FILE NAME
+              //NOT PATH: USE OTHER OPTIONS e.g.:
+              // - load and send content
+              // - use text box and specify path manually
+              // - send PATH configuration variable and prepend it to file names
+              // - browse through http, this requires implementing the HTTP
+              //   service in the library 
+              var dropbox;
+
+              function dragenter(e) {
+                e.stopPropagation();
+                e.preventDefault();
+              }
+
+              function dragover(e) {
+                e.stopPropagation();
+                e.preventDefault();
+              } 
+              dropbox = document.querySelector( "#gui" );
+              dropbox.addEventListener("dragenter", dragenter, false);
+              dropbox.addEventListener("dragover", dragover, false);
+              dropbox.addEventListener("drop", drop, false); 
+  
+                              
+              window.loadModel = function loadModel(fileList) {            
+                if(fileList.length == 0) return;
+                sendFilePath(fileList[0].name);
+              } 
+
+              function drop(e) {
+                e.stopPropagation();
+                e.preventDefault();
+
+                var dt = e.dataTransfer;
+                var files = dt.files;
+
+                loadModel(files);
+              }
+
               function resizeCanvas() {
                   // var l = (window.innerWidth - canvas.width) / 2;
                   // var t = (window.innerHeight - canvas.height) / 2;
@@ -121,7 +160,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 if(!imageUrl) return;
                 img.src = imageUrl;
               };
-             
+               
            });
 
        </script>
@@ -148,8 +187,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
          <div>Size: <span name="bytes"></span> bytes</div>
          <!--
          FILE I/O: use hidden input
-         https://developer.mozilla.org/en-US/docs/Using_files_from_web_applications
-         <input type="file"/>-->
+         https://developer.mozilla.org/en-US/docs/Using_files_from_web_applications-->
+         <input type="file" onchange="loadModel(this.files)"/>
+      
       </div>
       
     </div>            

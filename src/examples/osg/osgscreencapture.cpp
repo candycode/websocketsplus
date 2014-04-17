@@ -95,10 +95,11 @@ struct Image {
 bool END = false;
 SyncQueue< vector< char > > msgQueue;
 osgViewer::Viewer* v = nullptr;
-int cs = TJSAMP_444;
+int cs = TJSAMP_420;
 int quality = 75;
 shared_ptr< wsp::Context< Image > > context(new wsp::Context< Image >);
 bool moving = false;
+//frames are sent to clients if and only if this variable's value is > 0
 int sendFrame = 2;
 //------------------------------------------------------------------------------
 struct Msg {
@@ -119,6 +120,14 @@ struct Msg {
         } else if(ResizeEvent(type)) {
             x = p[1];
             y = p[2];
+        } else if(ReadFile(type)) {
+              
+            const int len = p[1];
+            const short unsigned* s = (const short unsigned*) &d[2 * sizeof(int)];
+            filename = "";
+            for(int i = 0; i != len; ++i) {
+               filename.push_back((char) s[i]);
+            }
         }
     }
     bool MouseEvent(int e) {
@@ -133,12 +142,16 @@ struct Msg {
     bool ResizeEvent(int e) {
         return e == 6;
     }
+    bool ReadFile(int e) {
+        return e == 7;
+    }
     int type = -1;
     int x = -1;
     int y = -1;
     int buttons = -1;
     int key = -1;
     int delta = 0;
+    string filename;
 };
 //------------------------------------------------------------------------------
 int SelectButton(int buttons) {
@@ -198,6 +211,18 @@ void resizeevent(int w, int h) {
     v->getEventQueue()->windowResize(0, 0, w, h); 
 }
 
+void loadfiles(const std::string& f) {
+    osg::ref_ptr<osg::Node> loadedModel = osgDB::readNodeFile(f);
+    if (!loadedModel) {
+        std::cout << f << " - no data loaded" << std::endl;
+        return; 
+    }
+    osgUtil::Optimizer optimizer;
+    optimizer.optimize(loadedModel.get());
+    v->setSceneData(loadedModel.get());
+    sendFrame = 2;
+}
+
 void HandleMessage() {
     if(!msgQueue.Empty()) {
         std::vector< char > v;
@@ -226,10 +251,17 @@ void HandleMessage() {
             resizeevent(msg.x, msg.y);
         }
         break;
+        case 7: {
+            loadfiles(msg.filename);
+        }
+        break;
         default: break;          
         }
     }
 }
+
+
+
 //------------------------------------------------------------------------------
 class WindowCaptureCallback : public osg::Camera::DrawCallback {
     public:
@@ -423,8 +455,9 @@ void WindowCaptureCallback::ContextData::multiPBO(
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, read_pbo); 
     glReadPixels(0, 0, width, height, pixelFormat_, type_, 0);
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, copy_pbo);
-    GLubyte* src = (GLubyte*)ext->glMapBuffer(GL_PIXEL_PACK_BUFFER_ARB,
-                                              GL_READ_ONLY_ARB);
+    static GLubyte* src = nullptr;
+    src = (GLubyte*)ext->glMapBuffer(GL_PIXEL_PACK_BUFFER_ARB,
+                                     GL_READ_ONLY_ARB);
 #ifdef JPG_OWN_THREAD //creating one thread every time, use Executor instead 
     static future< void > jpg;
     static bool first = true;
@@ -477,11 +510,11 @@ void WindowCaptureCallback::ContextData::multiPBO(
             quality,
             TJXOP_VFLIP | TJFLAG_FASTDCT);    
 #endif        
-        
+        ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
         context->SetServiceDataSync(
                           Image(ImagePtr((char*) out, TJDeleter()), size,
                                          count++));
-        ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
+        
     }
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
     currentPboIndex_ = nextPboIndex;
