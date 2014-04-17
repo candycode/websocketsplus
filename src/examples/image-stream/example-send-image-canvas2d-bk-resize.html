@@ -57,26 +57,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var context = canvas.getContext('2d');
               var maintainAspectRatio = true;
               var ratio = 1080 / 1920;
-
+              var firstFrame = true;
               while(eventScriptLoaded == undefined);
               initEvents(canvas);
             
-              //resize canvas accordingly; the right way to resize the 3d view
-              //is oto send a resize event to the service and get back a
-              //properly formatted image            
-              img.onload = function() {
-                canvas.width = canvas.width 
-                  == img.width ? canvas.width : img.width;
-                canvas.height = canvas.height
-                  == img.height ? canvas.height : img.height;
-                context.drawImage(img, 0, 0);
-              }  
-              var proto = location.protocol;
-              var hostname = "localhost";
-              if(proto != "file:") hostname = location.hostname;
-              var WSURL = "ws://" + hostname + ":5000";
-              websocket = new WebSocket(WSURL, 'image-stream');
-              websocket.binaryType = "arraybuffer";
+              
               function resizeCanvas() {
                   // var l = (window.innerWidth - canvas.width) / 2;
                   // var t = (window.innerHeight - canvas.height) / 2;
@@ -88,6 +73,25 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                   //initEvents function
                   sendResizeEvent(window.innerWidth, window.innerHeight);
               }
+              img.onload = function() {
+                canvas.width = canvas.width 
+                  == img.width ? canvas.width : img.width;
+                canvas.height = canvas.height
+                  == img.height ? canvas.height : img.height;
+                if(firstFrame) {
+                  firstFrame = false;
+                  resizeCanvas();
+                  return;  
+                }  
+                context.drawImage(img, 0, 0);
+              }  
+              var proto = location.protocol;
+              var hostname = "localhost";
+              if(proto != "file:") hostname = location.hostname;
+              var WSURL = "ws://" + hostname + ":5000";
+              websocket = new WebSocket(WSURL, 'image-stream');
+              websocket.binaryType = "arraybuffer";
+             
               window.addEventListener('resize',resizeCanvas, true);  
 
               websocket.onopen = function () {
@@ -117,7 +121,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 if(!imageUrl) return;
                 img.src = imageUrl;
               };
-              //resizeCanvas();
+             
            });
 
        </script>

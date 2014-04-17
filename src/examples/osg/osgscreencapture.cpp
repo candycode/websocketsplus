@@ -191,10 +191,11 @@ void wheelevent(const Msg& m) {
 
 
 void resizeevent(int w, int h) {
-    sendFrame = 3;
+    sendFrame = 10;
     v->getCamera()->getGraphicsContext()->resized(0, 0, w, h);      
-    //the following does not work!
-    //v->getEventQueue()->windowResize(0, 0, w, h); 
+    //the following does not resize the context but it is required to
+    //make the manipulators work!
+    v->getEventQueue()->windowResize(0, 0, w, h); 
 }
 
 void HandleMessage() {
@@ -736,41 +737,37 @@ int main(int argc, char** argv)
     viewer.getEventQueue()->windowResize(0, 0, width, height);  
     
 
-class CameraUpdateCallback : public osg::NodeCallback
-{
-public:
-    CameraUpdateCallback(int& q, int& s) : quality_(q), sendFrame_(s) {}
-     virtual void operator()(osg::Node* node, osg::NodeVisitor* nv) {
-         //std::cout<<"Camera update callback - pre traverse"<<node<<std::endl;
-        traverse(node,nv);
-        osg::Camera* c = (osg::Camera*) node;
-        if(c->getViewMatrix() != d) {
-            int& q = quality;
-            q = minQuality_;
-            int& s = sendFrame_;
-            s = 2;
-            d = c->getViewMatrix();
-        } else {
-            int& q = quality;
-            q = maxQuality_;
-            int& s = sendFrame_;
-            if(s > 0) --s;
-        }
-         //std::cout<<"Camera update callback - post traverse"<<node<<std::endl;
-     }
-private:
-     osg::Matrixd d;
-     int minQuality_ = 10;
-     int maxQuality_ = 80;
-     reference_wrapper< int > quality_;
-     reference_wrapper< int > sendFrame_;
- };
+    class CameraUpdateCallback : public osg::NodeCallback {
+    public:
+        CameraUpdateCallback(int& q, int& s) : quality_(q), sendFrame_(s) {}
+         virtual void operator()(osg::Node* node, osg::NodeVisitor* nv) {
+            traverse(node,nv);
+            osg::Camera* c = (osg::Camera*) node;
+            if(c->getViewMatrix() != d) {
+                int& q = quality;
+                q = minQuality_;
+                int& s = sendFrame_;
+                s = 2;
+                d = c->getViewMatrix();
+            } else {
+                int& q = quality;
+                q = maxQuality_;
+                int& s = sendFrame_;
+                if(s > 0) --s;
+            }
+         }
+    private:
+         osg::Matrixd d;
+         int minQuality_ = 10;
+         int maxQuality_ = 80;
+         reference_wrapper< int > quality_;
+         reference_wrapper< int > sendFrame_;
+     };
  
 
-viewer.getCamera()->setUpdateCallback(
+    viewer.getCamera()->setUpdateCallback(
                                     new CameraUpdateCallback(quality,
                                                              sendFrame));
-//viewer.getCamera()->setClearColor(osg::Vec4(0, 0, 0, 0));
 
     using namespace chrono;
     const microseconds T(int(1E6/60.0));
