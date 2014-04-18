@@ -358,17 +358,21 @@ private:
     ///Create a new protocol->service mapping
     template < typename ContextT, typename ArgT, typename...ArgsT >
     void AddHandlers(const ArgT& entry, const ArgsT&...entries) {
-        if(entry.name == std::string("http-only")) 
-            throw std::runtime_error("HTTP protocol not supported");
         libwebsocket_protocols p;
         p.name = new char[entry.name.size() + 1];
         p.rx_buffer_size = entry.rxBufSize;
         p.no_buffer_all_partial_tx = 1;//1; //handle partial send
         std::strcpy((char*) p.name, entry.name.c_str());
-        p.callback = &WebSocketService::WSCallback< ContextT,
-                                  typename ArgT::ServiceType,
-                                  ArgT::type,
-                                  ArgT::sendMode >;
+        if(entry.name == std::string("http-only"))
+            p.callback = &WebSocketService::HttpCallback< ContextT,
+                                          typename ArgT::ServiceType,
+                                          ArgT::type,
+                                          ArgT::sendMode >;
+        else                                
+            p.callback = &WebSocketService::WSCallback< ContextT,
+                                          typename ArgT::ServiceType,
+                                          ArgT::type,
+                                          ArgT::sendMode >;
         p.per_session_data_size = sizeof(typename ArgT::ServiceType);
         protocolHandlers_.push_back(p);
         AddHandlers< ContextT >(entries...);
@@ -377,7 +381,7 @@ private:
     template < typename T >
     void AddHandlers() {}
     ///Actual callback function passed to libwebsocket to handle the
-    ///WebSocket protocol communication
+    ///WebSockets protocol communication
     /// @tparam ContextT shared context
     /// @tparam T Service type
     /// @tparam t communication type, sync or async
@@ -396,6 +400,28 @@ private:
                void *user,
                void *in,
                size_t len);
+    ///Actual callback function passed to libwebsocket to handle the
+    ///HTTP communication
+    /// @tparam ContextT shared context
+    /// @tparam T Service type
+    /// @tparam t communication type, sync or async
+    /// @tparam sm send processing mode: greedy (loop) or async
+    /// @tparam rm receive processing mode: greedy (loop) or async
+    /// @param context libwebsocket context
+    /// @param wsi libwebsocket struct pointer
+    /// @param reason one of libsockets' LWS_* values
+    /// @param in input buffer
+    /// @param len length of input buffer
+    /// @return true if all packets sent, false otherwise
+    template < typename ContextT, typename T, Type t, SendMode sm >
+    static int HttpCallback(libwebsocket_context *context,
+               libwebsocket *wsi,
+               libwebsocket_callback_reasons reason,
+               void *user,
+               void *in,
+               size_t len);
+    ///Send data to clients, greedy flags specifies id send should be performed
+    ///in a loop or with multiple calls to Send
     template < typename C, typename S >
     static bool Send(libwebsocket_context *context,
                      libwebsocket* wsi,
@@ -455,6 +481,36 @@ private:
         }
         return done;
     }
+
+    ///Send data to HTTP clients 
+    template < typename C, typename S >
+    static bool HttpSend(libwebsocket_context *context,
+                         libwebsocket* wsi,
+                         void* user) {
+        S* s = reinterpret_cast< S* >(user);
+        assert(s);
+        if(!s->Data()) return true;
+        C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
+        assert(c);
+        using DF = typename S::DataFrame;  
+        const int chunkSize = s->GetSuggestedOutChunkSize();   
+        const DF df = s->Get(chunkSize);    
+        const size_t bsize = df.frameEnd - df.frameBegin;
+            //std::cout << size_t(df.frameEnd - df.frameBegin) << std::endl;
+        if( df.frameEnd == df.bufferEnd) return true;
+        const bool begin = df.frameBegin == df.bufferBegin;
+        const size_t bytesToWrite = bsize;
+        if(bytesToWrite < 1) return true;         
+        const int bytesWritten                                    
+                 = libwebsocket_write(
+                                      wsi, 
+                                      (unsigned char*) df.frameBegin,
+                                      bytesToWrite, //<= chunkSize
+                                      LWS_WRITE_HTTP);
+        if(bytesWritten < bytesToWrite) return false;
+        else return true;
+    }
+
     ///Release resources
     void Clear() {
         for(auto& i: protocolHandlers_) {
@@ -570,4 +626,87 @@ int WebSocketService::WSCallback(
     return 0;
 }
 
+
+//Constructor(Context, unordered_map<string, string> headers)
+//Valid
+//InitBody
+//Get
+//Data
+//GetSuggestedChunkSize
+//------------------------------------------------------------------------------
+std::unordered_map< std::string, std::string >
+ParseHttpHeader(libwebsocket *wsi);
+
+template < typename C, typename S, WebSocketService::Type type,
+           WebSocketService::SendMode sm >
+int WebSocketService::HttpCallback(
+               libwebsocket_context *context,
+               libwebsocket *wsi,
+               libwebsocket_callback_reasons reason,
+               void *user,
+               void *in,
+               size_t len) {
+    switch (reason) {
+    case LWS_CALLBACK_HTTP:
+        if (len < 1) {
+            libwebsockets_return_http_status(context, wsi,
+                        HTTP_STATUS_BAD_REQUEST, NULL);
+            return -1;
+        }
+        C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
+        c->InitSession(user);
+        new (user) S(c,(const char *) in, len);
+        const S* s = reinterpret_cast< const S* >(user, ParseHttpHeader(wsi));
+        /* this server has no concept of directories */
+        if(!s->Valid()) {
+            libwebsockets_return_http_status(context, wsi,
+                        HTTP_STATUS_FORBIDDEN, NULL);
+            return -1;
+        }
+        //if a legal POST URL, let it continue and accept data
+        if(lws_hdr_total_length(wsi, WSI_TOKEN_POST_URI))
+            return 0;
+        if(!s->FilePath().empty()) {
+            //async, won't stop thread
+            if(libwebsocket_serve_http_file(context, wsi, s->FilePath().c_str(),
+                                         s->Headers().c_str()))
+                return -1; //return if file sent or error
+        } else {
+            //should I send header here ??
+        }
+        
+        break;
+    case LWS_CALLBACK_HTTP_BODY:
+        //prepare header and body for sending, should header be sent separately?
+        S* s = reinterpret_cast< const S* >(user);
+        s->Init();
+        break;
+    case LWS_CALLBACK_HTTP_BODY_COMPLETION:
+        libwebsockets_return_http_status(context, wsi, HTTP_STATUS_OK, NULL);
+        return -1;
+        break;
+    case LWS_CALLBACK_HTTP_FILE_COMPLETION:
+        //TBD
+        return -1;
+        break;
+    case LWS_CALLBACK_HTTP_WRITEABLE:     
+        const bool GREEDY_OPTION = sm == SendMode::SEND_GREEDY;
+        const bool allSent = HttpSend< C, S >(context, wsi, user);
+        if(!allSent) {
+            libwebsockets_set_timeout(wsi, PENDING_TIMEOUT_HTTP_CONTENT, 5);
+            libwebsocket_callback_on_writable(context, wsi);
+        }
+        break;
+    default:
+        break;
+    }
+
+    return 0;
+}
+
+
 } //namespace wsp
+
+
+
+
