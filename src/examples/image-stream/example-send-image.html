@@ -20,16 +20,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <html>
    <head>
        <meta charset="utf-8">
+       <script type="text/javascript" src="event-handlers.js">
+       </script>
        <script src=
   "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
-       <script type="text/javascript">
-          var websocket;
-       </script>
        <script type="text/javascript" src="wsmouse.js">
        </script>
        <script type="text/javascript">
          
           $(function() {
+              var websocket;
               window.WebSocket = window.WebSocket || window.MozWebSocket;
               var out = $("[name='output']");
               var bytes = $("[name='bytes']");
@@ -47,12 +47,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var minSize = 0x100000000;
               var maxSize = 0;
 
+           
+
               var proto = location.protocol;
               var hostname = "localhost";
               if(proto != "file:") hostname = location.hostname;
               var WSURL = "ws://" + hostname + ":5000";
               websocket = new WebSocket(WSURL, 'image-stream');
               websocket.binaryType = "arraybuffer";
+
+              function resizeImage() {
+                sendResizeEvent(window.innerWidth, window.innerHeight);
+              }
+
+              window.addEventListener('resize',resizeImage, true); 
+
+              while(eventScriptLoaded == undefined);
+              initEvents(img, websocket);
+
               websocket.onopen = function () {
                   $('h1').css('color', 'green');
               };
@@ -67,6 +79,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               img.onload = function() {
                   W = this.width;
                   H = this.height;
+                  if(frames == 1) {
+                    resizeImage();
+                  }
               }
               var size;
               var dSize;
@@ -108,6 +123,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
        </style>
        </head>
    <body>
+       <div><img id="photo" style="pointer-events: none; position: absolute; top:0;left:0; overflow: scroll"/></div> 
        <div style="color: red; font-size: 200%; position: fixed">
          <h1>WebSockets stream test</h1>
          <div>Frame/s: <span name="output"></span></div>
@@ -119,9 +135,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
          <div>Max - min size: <span name="delta"></span></div>
          <div><span id="pos"></span></div>
        </div>
-<!--        <div><img id="photo" style="width: 960px; height: 540px; display: block; margin-left: auto; margin-right: auto"/></div> -->
-<!--width: 2880px; height: 1800px; -->
-       <div><img id="photo" style="pointer-events: none; z-index: -1;position: absolute; top:0;left:0; overflow: scroll"/></div> 
    </body>
 </html>
 

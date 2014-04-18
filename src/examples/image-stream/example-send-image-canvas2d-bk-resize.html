@@ -30,16 +30,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             display: block;  /* No floating content on sides */
         }
     </style>
-        <script type="text/javascript">
-          var websocket;
-       </script>
-       <script type="text/javascript" src="wsmouse.js">
+       <script type="text/javascript" src="event-handlers.js">
        </script>
        <script src=
   "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
        <script type="text/javascript">
           
           $(function() {
+              var websocket;
               window.WebSocket = window.WebSocket || window.MozWebSocket;
               var MIME_TYPE = "image/jpeg";
               //var MIME_TYPE = "image/png";
@@ -58,9 +56,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var maintainAspectRatio = true;
               var ratio = 1080 / 1920;
               var firstFrame = true;
-              while(eventScriptLoaded == undefined);
-              initEvents(canvas);
-            
+                        
               
               //WARNING: ALL FILE INPUT OPERATIONS ONLY RETURN FILE NAME
               //NOT PATH: USE OTHER OPTIONS e.g.:
@@ -131,6 +127,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               websocket = new WebSocket(WSURL, 'image-stream');
               websocket.binaryType = "arraybuffer";
              
+              while(eventScriptLoaded == undefined);
+              initEvents(canvas, websocket); 
+
               window.addEventListener('resize',resizeCanvas, true);  
 
               websocket.onopen = function () {

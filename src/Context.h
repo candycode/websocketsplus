@@ -23,6 +23,7 @@
 #include <stdexcept>
 #include <mutex>
 #include <utility>
+#include <algorithm>
 
 namespace wsp {
 
@@ -89,6 +90,10 @@ public:
     void SetServiceDataSync(ServiceData&& sd) {
         std::lock_guard< std::mutex > guard(mutex_);
         SetServiceData(std::move(sd));
+    }
+    void SetServiceDataSyncSwap(ServiceData& sd) {
+        std::lock_guard< std::mutex > guard(mutex_);
+        std::swap(sd, serviceData_);
     }
     bool SetServiceDataTrySync(const ServiceData& sd) {
         if(mutex_.try_lock()) {

@@ -73,6 +73,7 @@ private:
 
 struct TJDeleter {
     void operator()(char* p) const {
+        if(!p) return;
         tjFree((unsigned char*) p);
     }
 };
@@ -464,9 +465,16 @@ void WindowCaptureCallback::ContextData::multiPBO(
     static vector< unsigned char > b;
 #endif    
     if(src) {
+        static Image img;
         static int count = 0;
-        unsigned long size = tjBufSize(width, height, cs);
-        char* out = (char*) tjAlloc(size);
+        unsigned long size = 0;
+        char* out = nullptr;
+        size = tjBufSize(width, height, cs);
+        if(img.size < size) {      
+            out = (char*) tjAlloc(size);
+            img.image.reset(out);
+        }
+
 #ifdef  JPG_OWN_THREAD      
         if(first) first = false;
         else jpg.wait();
@@ -511,10 +519,9 @@ void WindowCaptureCallback::ContextData::multiPBO(
             TJXOP_VFLIP | TJFLAG_FASTDCT);    
 #endif        
         ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
-        context->SetServiceDataSync(
-                          Image(ImagePtr((char*) out, TJDeleter()), size,
-                                         count++));
-        
+        img.size = size;
+        img.id = count++;
+        context->SetServiceDataSyncSwap(img);
     }
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
     currentPboIndex_ = nextPboIndex;
@@ -523,6 +530,7 @@ void WindowCaptureCallback::ContextData::multiPBO(
 //------------------------------------------------------------------------------
 /// Image service: streams a sequence of images
 class ImageService : public SessionService< wsp::Context< Image > > {
+
     using Context = wsp::Context< Image >;
 public:
     using DataFrame = SessionService::DataFrame;
@@ -655,18 +663,6 @@ int main(int argc, char** argv)
 
     // add the thread model handler
     viewer.addEventHandler(new osgViewer::ThreadingHandler);
-
-   
-        
-    // add the stats handler
-    viewer.addEventHandler(new osgViewer::StatsHandler);
-
-    // add the help handler
-    viewer.addEventHandler(new osgViewer::HelpHandler(
-                                              arguments.getApplicationUsage()));
-
-    // add the record camera path handler
-    viewer.addEventHandler(new osgViewer::RecordCameraPathHandler);
 
     // add the LOD Scale handler
     viewer.addEventHandler(new osgViewer::LODScaleHandler);

@@ -1,4 +1,4 @@
-function initEvents(gui) {
+function initEvents(gui, websocket) {
 
 var MOUSE_DOWN = 1, MOUSE_UP = 2, MOUSE_MOVE = 3, KEY = 4,
     MOUSE_WHEEL = 5, RESIZE = 6, TEXT = 7;
@@ -31,13 +31,6 @@ function sendMouseEvent(m, e) {
   else if(e.button == 1) b = 1;
   else if(e.button == 2) b = 4;
   sendBuffer[3] = b;
-
-  // if(!websocket || websocket.readyState != websocket.open) {
-  //   console.log(sendBuffer[0] + " " +
-  //               sendBuffer[1] + " " +
-  //               sendBuffer[1]);
-  //   //return;              
-  // }  
   websocket.send(sendBuffer);
   //if(m == MOUSE_MOVE) count = 4;
 }
