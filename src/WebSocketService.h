@@ -102,11 +102,33 @@ using Protocols = std::vector< libwebsocket_protocols >;
 // /// Minimum delay between consecutive writes in seconds.
 // virtual std::chrono::duration< double > MinDelayBetweenWrites() const
 
+//types to detect the presence of an HTTP member inside a type to select
+//the proper callback function to use for service instance
+struct HttpService {};
+struct NoHttpService {};
+template < int > struct BoolToType {
+    typedef NoHttpService type;
+};
+template <> struct BoolToType< 0 > {
+    typedef HttpService type;
+};
+//SFINAE
+template < typename T > struct IsHttp {
+    typedef char yes[1];
+    typedef char no[2];
+    template < typename S >
+    static const yes& Check(const typename S::HTTP*);
+    template < typename S >
+    static const no& Check(...);
+    typedef typename BoolToType< sizeof(Check< T >(0)) 
+                        == sizeof(no) >::type type;
+};
 
 //-----------------------------------------------------------------------------
 /// libwebsockets wrapper: map your service to a protocol and call StartLoop
 /// Use only one single @c WebSocketService instance per process
 class WebSocketService {
+    
 private:    
     ///Interface for user data deleter, used to delete the context instance
     ///stored into the libwebsockets context created in the Init() method.
@@ -358,24 +380,37 @@ private:
     ///Create a new protocol->service mapping
     template < typename ContextT, typename ArgT, typename...ArgsT >
     void AddHandlers(const ArgT& entry, const ArgsT&...entries) {
+        AddHandler< ContextT >(entry, typename IsHttp< ArgT >::type());
+        AddHandlers< ContextT >(entries...);
+    }
+    template < typename ContextT, typename ArgT >
+    void AddHandler(const ArgT& entry, const NoHttpService&) {
         libwebsocket_protocols p;
         p.name = new char[entry.name.size() + 1];
         p.rx_buffer_size = entry.rxBufSize;
         p.no_buffer_all_partial_tx = 1;//1; //handle partial send
-        std::strcpy((char*) p.name, entry.name.c_str());
-        if(entry.name == std::string("http-only"))
-            p.callback = &WebSocketService::HttpCallback< ContextT,
-                                          typename ArgT::ServiceType,
-                                          ArgT::type,
-                                          ArgT::sendMode >;
-        else                                
-            p.callback = &WebSocketService::WSCallback< ContextT,
-                                          typename ArgT::ServiceType,
-                                          ArgT::type,
-                                          ArgT::sendMode >;
+        std::strcpy((char*) p.name, entry.name.c_str());        
+        p.callback = &WebSocketService::WSCallback< ContextT,
+                                      typename ArgT::ServiceType,
+                                      ArgT::type,
+                                      ArgT::sendMode >;
         p.per_session_data_size = sizeof(typename ArgT::ServiceType);
         protocolHandlers_.push_back(p);
-        AddHandlers< ContextT >(entries...);
+    }
+    template < typename ContextT, typename ArgT >
+    void AddHandler(const ArgT& entry, const HttpService&) {
+        libwebsocket_protocols p;
+        p.name = new char[entry.name.size() + 1];
+        p.rx_buffer_size = entry.rxBufSize;
+        p.no_buffer_all_partial_tx = 1;//1; //handle partial send
+        if(entry.name != "http-only")
+            throw std::logic_error(
+                "Http service assinged to non 'http-only' protocol");
+        std::strcpy((char*) p.name, entry.name.c_str());       
+        p.callback = &WebSocketService::HttpCallback< ContextT,
+                                                typename ArgT::ServiceType >;
+        p.per_session_data_size = sizeof(typename ArgT::ServiceType);
+        protocolHandlers_.push_back(p);                                        
     }
     ///Termination condition for variadic templates
     template < typename T >
@@ -386,7 +421,6 @@ private:
     /// @tparam T Service type
     /// @tparam t communication type, sync or async
     /// @tparam sm send processing mode: greedy (loop) or async
-    /// @tparam rm receive processing mode: greedy (loop) or async
     /// @param context libwebsocket context
     /// @param wsi libwebsocket struct pointer
     /// @param reason one of libsockets' LWS_* values
@@ -404,16 +438,13 @@ private:
     ///HTTP communication
     /// @tparam ContextT shared context
     /// @tparam T Service type
-    /// @tparam t communication type, sync or async
-    /// @tparam sm send processing mode: greedy (loop) or async
-    /// @tparam rm receive processing mode: greedy (loop) or async
     /// @param context libwebsocket context
     /// @param wsi libwebsocket struct pointer
     /// @param reason one of libsockets' LWS_* values
     /// @param in input buffer
     /// @param len length of input buffer
     /// @return true if all packets sent, false otherwise
-    template < typename ContextT, typename T, Type t, SendMode sm >
+    template < typename ContextT, typename T >
     static int HttpCallback(libwebsocket_context *context,
                libwebsocket *wsi,
                libwebsocket_callback_reasons reason,
@@ -633,12 +664,12 @@ int WebSocketService::WSCallback(
 //Get
 //Data
 //GetSuggestedChunkSize
+//HTTP const to identify it as an http service
 //------------------------------------------------------------------------------
 std::unordered_map< std::string, std::string >
 ParseHttpHeader(libwebsocket *wsi);
 
-template < typename C, typename S, WebSocketService::Type type,
-           WebSocketService::SendMode sm >
+template < typename C, typename S >
 int WebSocketService::HttpCallback(
                libwebsocket_context *context,
                libwebsocket *wsi,
@@ -647,7 +678,7 @@ int WebSocketService::HttpCallback(
                void *in,
                size_t len) {
     switch (reason) {
-    case LWS_CALLBACK_HTTP:
+    case LWS_CALLBACK_HTTP: {
         if (len < 1) {
             libwebsockets_return_http_status(context, wsi,
                         HTTP_STATUS_BAD_REQUEST, NULL);
@@ -656,7 +687,7 @@ int WebSocketService::HttpCallback(
         C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
         c->InitSession(user);
         new (user) S(c,(const char *) in, len);
-        const S* s = reinterpret_cast< const S* >(user, ParseHttpHeader(wsi));
+        const S* s = reinterpret_cast< const S* >(user);//, ParseHttpHeader(wsi));
         /* this server has no concept of directories */
         if(!s->Valid()) {
             libwebsockets_return_http_status(context, wsi,
@@ -668,18 +699,16 @@ int WebSocketService::HttpCallback(
             return 0;
         if(!s->FilePath().empty()) {
             //async, won't stop thread
-            if(libwebsocket_serve_http_file(context, wsi, s->FilePath().c_str(),
+            if(libwebsockets_serve_http_file(context, wsi, s->FilePath().c_str(),
                                          s->Headers().c_str()))
                 return -1; //return if file sent or error
         } else {
             //should I send header here ??
         }
-        
+        }
         break;
     case LWS_CALLBACK_HTTP_BODY:
-        //prepare header and body for sending, should header be sent separately?
-        S* s = reinterpret_cast< const S* >(user);
-        s->Init();
+        //response already prepared in constructor
         break;
     case LWS_CALLBACK_HTTP_BODY_COMPLETION:
         libwebsockets_return_http_status(context, wsi, HTTP_STATUS_OK, NULL);
@@ -690,12 +719,11 @@ int WebSocketService::HttpCallback(
         return -1;
         break;
     case LWS_CALLBACK_HTTP_WRITEABLE:     
-        const bool GREEDY_OPTION = sm == SendMode::SEND_GREEDY;
-        const bool allSent = HttpSend< C, S >(context, wsi, user);
+        {const bool allSent = HttpSend< C, S >(context, wsi, user);
         if(!allSent) {
-            libwebsockets_set_timeout(wsi, PENDING_TIMEOUT_HTTP_CONTENT, 5);
+            libwebsocket_set_timeout(wsi, PENDING_TIMEOUT_HTTP_CONTENT, 5);
             libwebsocket_callback_on_writable(context, wsi);
-        }
+        }}
         break;
     default:
         break;

@@ -24,10 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
        </script>
        <script src=
   "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
-       <script type="text/javascript" src="wsmouse.js">
-       </script>
-       <script type="text/javascript">
-         
+       <script type="text/javascript">         
           $(function() {
               var websocket;
               window.WebSocket = window.WebSocket || window.MozWebSocket;
@@ -46,8 +43,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var W, H;
               var minSize = 0x100000000;
               var maxSize = 0;
-
-           
 
               var proto = location.protocol;
               var hostname = "localhost";
