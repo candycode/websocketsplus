@@ -16,6 +16,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
+namespace wsp {
 // data frame information returned by Service::Get() and used
 // to send data to clients
 
@@ -52,3 +53,4 @@ struct DataFrame {
     : bufferBegin(bb), bufferEnd(be),
       frameBegin(fb), frameEnd(fe), binary(b) {}
 }; 
+}

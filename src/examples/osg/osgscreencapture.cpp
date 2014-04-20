@@ -34,7 +34,8 @@
 #include <sstream>
 #include <string.h>
 
-//g++ -std=c++11  ../src/examples/osg/osgscreencapture.cpp -I /usr/local/osg/include -L /usr/local/osg/lib64 -lOpenThreads -losgDB -losgGA -losgManipulator -losg -losgUtil -losgViewer -losgText -lGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib64  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread
+//g++ -std=c++11  ../src/examples/osg/osgscreencapture.cpp -I /usr/local/osg/include -L /usr/local/osg/lib64 -lOpenThreads -losgDB -losgGA -losgManipulator -losg -losgUtil -losgViewer -losgText -lGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib64  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread osg-stream.exe
+//clang++ -std=c++11  -stdlib=libc++ ../src/examples/osg/osgscreencapture.cpp -I /usr/local/osg/include -L /usr/local/osg/lib -lOpenThreads -losgDB -losgGA -losgManipulator -losg -losgUtil -losgViewer -losgText  -framework OpenGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread -o osg-stream.exe
 //==============================================================================
 #include <thread>
 #include <future>
