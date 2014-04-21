@@ -40,7 +40,7 @@ public:
     using DataFrame = wsp::DataFrame;
     HttpService(wsp::Context<>* , const char* req, size_t len,
                 const unordered_map< string, string >& m) :
-    df_(nullptr, nullptr, nullptr, nullptr, false) {
+    df_(nullptr, nullptr, nullptr, nullptr, false), reqHeader_(m) {
         request_.resize(len + 1);
         request_.assign(req, req + len);
         request_.push_back('\0');
@@ -100,6 +100,7 @@ private:
     string headers_;
     vector< char > request_;
     vector< char > response_;
+    std::unordered_map< string, string > reqHeader_;
     static const char* BODY;
     mutable DataFrame df_;
 };
