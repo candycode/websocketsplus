@@ -19,6 +19,7 @@
 //WebSocket service: map protocols to user defined services and handle
 //client-server communication in synchronous or asynchronous way
 
+#include <iostream>
 #include <string>
 #include <memory>
 #include <cstring>
@@ -528,9 +529,6 @@ private:
         const int chunkSize = s->GetSuggestedOutChunkSize();   
         const DF df = s->Get(chunkSize);    
         const size_t bsize = df.frameEnd - df.frameBegin;
-            //std::cout << size_t(df.frameEnd - df.frameBegin) << std::endl;
-        if( df.frameEnd == df.bufferEnd) return true;
-        const bool begin = df.frameBegin == df.bufferBegin;
         const size_t bytesToWrite = bsize;
         if(bytesToWrite < 1) return true;         
         const int bytesWritten                                    
@@ -539,8 +537,10 @@ private:
                                       (unsigned char*) df.frameBegin,
                                       bytesToWrite, //<= chunkSize
                                       LWS_WRITE_HTTP);
-        if(bytesWritten < bytesToWrite) return false;
-        else return true;
+        if(bytesWritten < 0) return true;
+        const bool done = bytesWritten == bsize;
+        s->UpdateOutBuffer(bytesWritten);
+        return done;
     }
 
     ///Release resources
@@ -659,14 +659,9 @@ int WebSocketService::WSCallback(
 }
 
 
-//Constructor(Context, unordered_map<string, string> headers)
-//Valid
-//InitBody
-//Get
-//Data
-//GetSuggestedChunkSize
-//HTTP const to identify it as an http service
+
 //------------------------------------------------------------------------------
+
 std::unordered_map< std::string, std::string >
 ParseHttpHeader(libwebsocket *wsi);
 
@@ -705,13 +700,16 @@ int WebSocketService::HttpCallback(
                 return -1; //return if file sent or error
         } else {
             //should I send header here ??
+            libwebsocket_callback_on_writable(context, wsi);
         }
         }
         break;
     case LWS_CALLBACK_HTTP_BODY:
         //response already prepared in constructor
+        std::cout << "LWS_CALLBACK_HTTP_WRITEABLE" << std::endl;      
         break;
     case LWS_CALLBACK_HTTP_BODY_COMPLETION:
+        std::cout << "LWS_CALLBACK_HTTP_WRITEABLE" << std::endl;      
         libwebsockets_return_http_status(context, wsi, HTTP_STATUS_OK, NULL);
         return -1;
         break;
@@ -719,7 +717,7 @@ int WebSocketService::HttpCallback(
         //TBD
         return -1;
         break;
-    case LWS_CALLBACK_HTTP_WRITEABLE:     
+    case LWS_CALLBACK_HTTP_WRITEABLE:    
         {const bool allSent = HttpSend< C, S >(context, wsi, user);
         if(!allSent) {
             libwebsocket_set_timeout(wsi, PENDING_TIMEOUT_HTTP_CONTENT, 5);

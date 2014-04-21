@@ -40,21 +40,39 @@ public:
     using DataFrame = wsp::DataFrame;
     HttpService(wsp::Context<>* , const char* req, size_t len,
                 const unordered_map< string, string >&) :
-    df_(BODY, BODY + strlen(BODY), BODY, BODY, false) {
+    df_(nullptr, nullptr, nullptr, nullptr, false) {
         request_.resize(len + 1);
         request_.assign(req, req + len);
         request_.back() = '\0';
+        const string h = string("HTTP/1.0 200 OK\x0d\x0a"
+                         "Server: libwebsockets\x0d\x0a"
+                         "Content-Type: text/html\x0d\x0a" 
+                         "Content-Length: ") 
+                         + to_string(strlen(BODY))
+                         + string("\x0d\x0a\x0d\x0a");   
+
+        response_.resize(h.size());
+        response_.assign(h.begin(), h.end());   
     }
     //Constructor(Context, unordered_map<string, string> headers)
     bool Valid() const { return true; }
     void InitBody() {}
-    const DataFrame& Get(int chunkSize) const {
-        df_.frameBegin = df_.frameEnd;
-        if(df_.frameBegin >= df_.bufferEnd) InitDataFrame();
-        else {
-            df_.frameEnd = min(df_.frameBegin + chunkSize, df_.bufferEnd);
+    //return data frame and update frame end
+    const DataFrame& Get(int requestedChunkLength) {
+        if(df_.frameEnd < df_.bufferEnd) {
+           //frameBegin *MUST* be updated in the UpdateOutBuffer method
+           //because in case the consumed data is less than requestedChunkLength
+           df_.frameEnd += min((ptrdiff_t) requestedChunkLength, 
+                               df_.bufferEnd - df_.frameEnd);
+        } else {
+           InitDataFrame();
         }
-        return df_;
+        return df_;  
+    }
+    //update frame begin/end
+    void UpdateOutBuffer(int bytesConsumed) {
+        df_.frameBegin += bytesConsumed;
+        df_.frameEnd = df_.frameBegin;
     }
     bool Data() const { return true; }
     int GetSuggestedOutChunkSize() const { return 0x1000; }
@@ -63,8 +81,8 @@ public:
     const string& FileMimeType() const { return mimeType_; }
 private:
     void InitDataFrame() const {
-        df_.bufferBegin = BODY;
-        df_.bufferEnd = BODY + strlen(BODY);
+        df_.bufferBegin = &response_[0];
+        df_.bufferEnd = &response_[0] + response_.size();
         df_.frameBegin = df_.bufferBegin;
         df_.frameEnd = df_.frameBegin;
     }    
@@ -73,6 +91,7 @@ private:
     string mimeType_;
     string headers_;
     vector< char > request_;
+    vector< char > response_;
     static const char* BODY;
     mutable DataFrame df_;
 };
