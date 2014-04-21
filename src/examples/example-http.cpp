@@ -45,14 +45,15 @@ public:
         request_.assign(req, req + len);
         request_.back() = '\0';
         const string h = string("HTTP/1.0 200 OK\x0d\x0a"
-                         "Server: libwebsockets\x0d\x0a"
+                         "Server: websockets+\x0d\x0a"
                          "Content-Type: text/html\x0d\x0a" 
                          "Content-Length: ") 
                          + to_string(strlen(BODY))
-                         + string("\x0d\x0a\x0d\x0a");   
+                         + string("\x0d\x0a\x0d\x0a") + BODY;   
 
         response_.resize(h.size());
-        response_.assign(h.begin(), h.end());   
+        response_.assign(h.begin(), h.end());
+        InitDataFrame();   
     }
     //Constructor(Context, unordered_map<string, string> headers)
     bool Valid() const { return true; }
@@ -97,7 +98,7 @@ private:
 };
 
 const char* HttpService::BODY =
-        "<!DOCTYPE html><html><body><p><em>Hello</em></p></body></html>"; 
+        "<!DOCTYPE html><head></head><html><body><p><em>Hello</em></p></body></html>"; 
 //------------------------------------------------------------------------------
 int main(int, char**) {
     using WSS = wsp::WebSocketService;
