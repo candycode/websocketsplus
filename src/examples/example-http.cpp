@@ -44,7 +44,12 @@ public:
         request_.resize(len + 1);
         request_.assign(req, req + len);
         request_.push_back('\0');
+#if SERVE_FILE 
+        filePath_ = "../src/examples/example-streaming.html";
+        mimeType_ = "text/html";
+#else        
         ComposeResponse(wsp::MapToString(m) + "<br/>" + string(BODY));
+#endif        
     }
     //Constructor(Context, unordered_map<string, string> headers)
     bool Valid() const { return true; }
@@ -80,6 +85,17 @@ private:
         df_.bufferEnd = &response_[0] + response_.size();
         df_.frameBegin = df_.bufferBegin;
         df_.frameEnd = df_.frameBegin;
+    }
+    void ParseFilePath(const std::vector< char >& req) {
+        // std::vector< char >::reverse_const_iterator i = 
+        //     std::find(req.rbegin(), req.rend(), '.');
+        // if(i == req.rend()) return;
+        // const char* c = &(--i.base());
+        // const std::string ext = (c + 1, &req[req.size() - 1]);
+        // if(ext == "jpg") {
+        //     mimeType_ = "image/jpeg";
+        // } 
+
     }    
     void ComposeResponse(const std::string& data) {
          const string h = string("HTTP/1.0 200 OK\x0d\x0a"

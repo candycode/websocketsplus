@@ -528,8 +528,7 @@ private:
         using DF = typename S::DataFrame;  
         const int chunkSize = s->GetSuggestedOutChunkSize();   
         const DF df = s->Get(chunkSize);    
-        const size_t bsize = df.frameEnd - df.frameBegin;
-        const size_t bytesToWrite = bsize;
+        const size_t bytesToWrite = df.frameEnd - df.frameBegin;
         if(bytesToWrite < 1) return true;         
         const int bytesWritten                                    
                  = libwebsocket_write(
@@ -538,7 +537,7 @@ private:
                                       bytesToWrite, //<= chunkSize
                                       LWS_WRITE_HTTP);
         if(bytesWritten < 0) return true;
-        const bool done = df.frameBegin + bytesWritten == df.bufferEnd;
+        const bool done = df.frameBegin + bytesWritten == df.frameEnd;
         s->UpdateOutBuffer(bytesWritten);
         return done;
     }
