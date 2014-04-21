@@ -43,17 +43,8 @@ public:
     df_(nullptr, nullptr, nullptr, nullptr, false) {
         request_.resize(len + 1);
         request_.assign(req, req + len);
-        request_.back() = '\0';
-        const string h = string("HTTP/1.0 200 OK\x0d\x0a"
-                         "Server: websockets+\x0d\x0a"
-                         "Content-Type: text/html\x0d\x0a" 
-                         "Content-Length: ") 
-                         + to_string(strlen(BODY))
-                         + string("\x0d\x0a\x0d\x0a") + BODY;   
-
-        response_.resize(h.size());
-        response_.assign(h.begin(), h.end());
-        InitDataFrame();   
+        request_.push_back('\0');
+        ComposeResponse(string(&request_[0]) + "<br/>" + string(BODY));
     }
     //Constructor(Context, unordered_map<string, string> headers)
     bool Valid() const { return true; }
@@ -61,15 +52,18 @@ public:
     //return data frame and update frame end
     const DataFrame& Get(int requestedChunkLength) {
         if(df_.frameEnd < df_.bufferEnd) {
+           sending_ = true;
            //frameBegin *MUST* be updated in the UpdateOutBuffer method
            //because in case the consumed data is less than requestedChunkLength
            df_.frameEnd += min((ptrdiff_t) requestedChunkLength, 
                                df_.bufferEnd - df_.frameEnd);
         } else {
            InitDataFrame();
+           sending_ = false;
         }
         return df_;  
     }
+    bool Sending() const { return sending_; }
     //update frame begin/end
     void UpdateOutBuffer(int bytesConsumed) {
         df_.frameBegin += bytesConsumed;
@@ -87,7 +81,20 @@ private:
         df_.frameBegin = df_.bufferBegin;
         df_.frameEnd = df_.frameBegin;
     }    
+    void ComposeResponse(const std::string& data) {
+         const string h = string("HTTP/1.0 200 OK\x0d\x0a"
+                         "Server: websockets+\x0d\x0a"
+                         "Content-Type: text/html\x0d\x0a" 
+                         "Content-Length: ") 
+                         + to_string(data.size())
+                         + string("\x0d\x0a\x0d\x0a") + data;   
+
+        response_.resize(h.size());
+        response_.assign(h.begin(), h.end());
+        InitDataFrame();   
+    }
 private:
+    mutable bool sending_ = false; 
     string filePath_;
     string mimeType_;
     string headers_;

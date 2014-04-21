@@ -706,11 +706,9 @@ int WebSocketService::HttpCallback(
         break;
     case LWS_CALLBACK_HTTP_BODY:
         //response already prepared in constructor
-        std::cout << "LWS_CALLBACK_HTTP_WRITEABLE" << std::endl;      
         break;
     case LWS_CALLBACK_HTTP_BODY_COMPLETION:
         std::cout << "LWS_CALLBACK_HTTP_WRITEABLE" << std::endl;      
-        libwebsockets_return_http_status(context, wsi, HTTP_STATUS_OK, NULL);
         return -1;
         break;
     case LWS_CALLBACK_HTTP_FILE_COMPLETION:
@@ -719,7 +717,8 @@ int WebSocketService::HttpCallback(
         break;
     case LWS_CALLBACK_HTTP_WRITEABLE: {
         const bool allSent = HttpSend< C, S >(context, wsi, user);
-        if(!allSent) {
+        const S* s = reinterpret_cast< const S* >(user);
+        if(!allSent || s->Sending()) {
             libwebsocket_set_timeout(wsi, PENDING_TIMEOUT_HTTP_CONTENT, 5);
             libwebsocket_callback_on_writable(context, wsi);
         } else return -1;
