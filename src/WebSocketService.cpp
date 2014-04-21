@@ -16,6 +16,8 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "WebSocketService.h"
+#include <algorithm>
+#include <sstream>
 
 namespace wsp {
 
@@ -94,5 +96,18 @@ ParseHttpHeader(libwebsocket *wsi) {
     }
     return hm;
 }
+
+
+std::string MapToString(
+    const std::unordered_map< std::string, std::string >& m,
+    const std::string& pre,
+    const std::string& post) {
+    std::ostringstream oss;
+    for(auto& i: m) {
+        oss << pre << i.first << ": " << i.second << post;
+    }
+    return oss.str();
+}
+
 
 } //namespace wsp

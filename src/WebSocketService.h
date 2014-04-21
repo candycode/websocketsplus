@@ -665,6 +665,10 @@ int WebSocketService::WSCallback(
 std::unordered_map< std::string, std::string >
 ParseHttpHeader(libwebsocket *wsi);
 
+std::string MapToString(const std::unordered_map< std::string, std::string >&,
+                        const std::string& pre = "",
+                        const std::string& post = "<br/>");
+
 template < typename C, typename S >
 int WebSocketService::HttpCallback(
                libwebsocket_context *context,

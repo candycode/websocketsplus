@@ -39,12 +39,12 @@ public:
                                //http
     using DataFrame = wsp::DataFrame;
     HttpService(wsp::Context<>* , const char* req, size_t len,
-                const unordered_map< string, string >&) :
+                const unordered_map< string, string >& m) :
     df_(nullptr, nullptr, nullptr, nullptr, false) {
         request_.resize(len + 1);
         request_.assign(req, req + len);
         request_.push_back('\0');
-        ComposeResponse(string(&request_[0]) + "<br/>" + string(BODY));
+        ComposeResponse(wsp::MapToString(m) + "<br/>" + string(BODY));
     }
     //Constructor(Context, unordered_map<string, string> headers)
     bool Valid() const { return true; }
@@ -105,7 +105,8 @@ private:
 };
 
 const char* HttpService::BODY =
-        "<!DOCTYPE html><head></head><html><body><p><em>Hello</em></p></body></html>"; 
+        "<!DOCTYPE html><head></head><html><body><p><em>Hello</em></p></body><"
+        "/html>"; 
 //------------------------------------------------------------------------------
 int main(int, char**) {
     using WSS = wsp::WebSocketService;
