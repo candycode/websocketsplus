@@ -538,7 +538,7 @@ private:
                                       bytesToWrite, //<= chunkSize
                                       LWS_WRITE_HTTP);
         if(bytesWritten < 0) return true;
-        const bool done = bytesWritten == bsize;
+        const bool done = df.frameBegin + bytesWritten == df.bufferEnd;
         s->UpdateOutBuffer(bytesWritten);
         return done;
     }
@@ -717,12 +717,13 @@ int WebSocketService::HttpCallback(
         //TBD
         return -1;
         break;
-    case LWS_CALLBACK_HTTP_WRITEABLE:    
-        {const bool allSent = HttpSend< C, S >(context, wsi, user);
+    case LWS_CALLBACK_HTTP_WRITEABLE: {
+        const bool allSent = HttpSend< C, S >(context, wsi, user);
         if(!allSent) {
             libwebsocket_set_timeout(wsi, PENDING_TIMEOUT_HTTP_CONTENT, 5);
             libwebsocket_callback_on_writable(context, wsi);
-        }}
+        } else return -1;
+    }
         break;
     default:
         break;
