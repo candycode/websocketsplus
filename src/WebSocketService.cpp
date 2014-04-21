@@ -87,11 +87,12 @@ ParseHttpHeader(libwebsocket *wsi) {
     };
     std::vector< char > buf(0x400);
     std::unordered_map< std::string, std::string > hm;
-    for (int n = 0; n < sizeof(token_names) / sizeof(token_names[0]); ++n) {
-        if(!lws_hdr_total_length(wsi, n)) continue;         
-        lws_hdr_copy(wsi, &buf[0], buf.size(), n);
+    for (int n = 0; n < sizeof(tokenNames) / sizeof(tokenNames[0]); ++n) {
+        if(!lws_hdr_total_length(wsi, lws_token_indexes(n))) continue;         
+        lws_hdr_copy(wsi, &buf[0], buf.size(), lws_token_indexes(n));
         hm[tokenNames[n]] = &buf[0];
     }
+    return hm;
 }
 
 } //namespace wsp

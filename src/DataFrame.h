@@ -47,6 +47,7 @@ struct DataFrame {
     /// @param fb pointer to first element of sub-buffer
     /// @param fe pointer to fitst element after the end of the sub-buffer
     ///        to send
+    /// @param b binary flag, true if binary, false if text
     DataFrame(const char* bb, const char* be,
               const char* fb, const char* fe,
               bool b)

@@ -22,52 +22,74 @@
 //  * Service is a per-session instance which handles requests and replies
 //    through the Put and Get methods
 #include <iostream>
+#include <unordered_map>
+#include <string>
+#include <vector>
+#include <cstring>
 #include "../WebSocketService.h"
 #include "../Context.h"
 #include "../DataFrame.h"
 
-static const char* HEADER = 
-
-
-static const char* BODY = 
+using namespace std;
 
 class HttpService {
 public:
-    static const int HTTP = 1; //value can be anything;
+    static const int HTTP = 1; //value can be anything; HTTP member checked
+                               //at compile time to determine if service is
+                               //http
     using DataFrame = wsp::DataFrame;
-    HttpService(wsp::Context<>* , const unordered_map&< string, string >&) {}
+    HttpService(wsp::Context<>* , const char* req, size_t len,
+                const unordered_map< string, string >&) :
+    df_(BODY, BODY + strlen(BODY), BODY, BODY, false) {
+        request_.resize(len + 1);
+        request_.assign(req, req + len);
+        request_.back() = '\0';
+    }
     //Constructor(Context, unordered_map<string, string> headers)
     bool Valid() const { return true; }
     void InitBody() {}
-    const DataFrame& Get(int chunkSize) const {}
+    const DataFrame& Get(int chunkSize) const {
+        df_.frameBegin = df_.frameEnd;
+        if(df_.frameBegin >= df_.bufferEnd) InitDataFrame();
+        else {
+            df_.frameEnd = min(df_.frameBegin + chunkSize, df_.bufferEnd);
+        }
+        return df_;
+    }
     bool Data() const { return true; }
-    int GetSuggestedChunkSize() const { return 0x1000; }
+    int GetSuggestedOutChunkSize() const { return 0x1000; }
+    const string& FilePath() const { return filePath_; }
+    const string& Headers() const { return headers_; }
+    const string& FileMimeType() const { return mimeType_; }
+private:
+    void InitDataFrame() const {
+        df_.bufferBegin = BODY;
+        df_.bufferEnd = BODY + strlen(BODY);
+        df_.frameBegin = df_.bufferBegin;
+        df_.frameEnd = df_.frameBegin;
+    }    
+private:
+    string filePath_;
+    string mimeType_;
+    string headers_;
+    vector< char > request_;
+    static const char* BODY;
+    mutable DataFrame df_;
 };
 
-//Valid
-//InitBody
-//Get
-//Data
-//GetSuggestedChunkSize
-//HTTP const to identify it as an http service
-};
-
-
+const char* HttpService::BODY =
+        "<!DOCTYPE html><html><body><p><em>Hello</em></p></body></html>"; 
 //------------------------------------------------------------------------------
-/// Simple echo test driver, check below 'main' for matching html client code 
 int main(int, char**) {
-    using namespace wsp;
-    using WSS = WebSocketService;
+    using WSS = wsp::WebSocketService;
     WSS ws;
-    using Service = HttpService< Context<> >;
-    const int readBufferSize = 4096; //the default anyway
+    using Service = HttpService;
     //init service
     ws.Init(8001, //port
             nullptr, //SSL certificate path
             nullptr, //SSL key path
-            Context<>(), //context instance, will be copied internally
+            wsp::Context<>(), //context instance, will be copied internally
             WSS::Entry< Service, WSS::ASYNC_REP >("http-only"));
-    );
     //start event loop: one iteration every >= 50ms
     ws.StartLoop(50, //ms
                  []{return true;} //termination condition (exit on false)

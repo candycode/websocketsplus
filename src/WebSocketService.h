@@ -26,6 +26,7 @@
 #include <vector>
 #include <stdexcept>
 #include <memory>
+#include <unordered_map>
 
 #include <libwebsockets.h>
 
@@ -121,7 +122,7 @@ template < typename T > struct IsHttp {
     template < typename S >
     static const no& Check(...);
     typedef typename BoolToType< sizeof(Check< T >(0)) 
-                        == sizeof(no) >::type type;
+                        == sizeof(yes) >::type type;
 };
 
 //-----------------------------------------------------------------------------
@@ -686,8 +687,8 @@ int WebSocketService::HttpCallback(
         }
         C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
         c->InitSession(user);
-        new (user) S(c,(const char *) in, len);
-        const S* s = reinterpret_cast< const S* >(user);//, ParseHttpHeader(wsi));
+        new (user) S(c,(const char *) in, len, ParseHttpHeader(wsi));
+        const S* s = reinterpret_cast< const S* >(user);
         /* this server has no concept of directories */
         if(!s->Valid()) {
             libwebsockets_return_http_status(context, wsi,
@@ -700,7 +701,7 @@ int WebSocketService::HttpCallback(
         if(!s->FilePath().empty()) {
             //async, won't stop thread
             if(libwebsockets_serve_http_file(context, wsi, s->FilePath().c_str(),
-                                         s->Headers().c_str()))
+                                         s->FileMimeType().c_str(), nullptr))
                 return -1; //return if file sent or error
         } else {
             //should I send header here ??
