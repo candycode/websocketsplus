@@ -15,22 +15,31 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-//Test driver for WebSocketService 
-//Interface requirements:
-//  * Context must provide reusable storage space to per-session service
-//    instances to avoid reallocating memory at each request-reply
-//  * Service is a per-session instance which handles requests and replies
-//    through the Put and Get methods
+//Http service example
+
 #include <iostream>
 #include <unordered_map>
 #include <string>
 #include <vector>
 #include <cstring>
+#include <sstream>
 #include "../WebSocketService.h"
 #include "../Context.h"
 #include "../DataFrame.h"
 
 using namespace std;
+
+
+std::string MapToString(
+    const std::unordered_map< std::string, std::string >& m,
+    const std::string& pre = "",
+    const std::string& post = "<br/>") {
+    std::ostringstream oss;
+    for(auto& i: m) {
+        oss << pre << i.first << ": " << i.second << post;
+    }
+    return oss.str();
+}
 
 class HttpService {
 public:
@@ -48,12 +57,11 @@ public:
         filePath_ = "../src/examples/example-streaming.html";
         mimeType_ = "text/html";
 #else        
-        ComposeResponse(wsp::MapToString(m) + "<br/>" + string(BODY));
+        ComposeResponse(MapToString(m) + "<br/>" + string(BODY));
 #endif        
     }
     //Constructor(Context, unordered_map<string, string> headers)
     bool Valid() const { return true; }
-    void InitBody() {}
     //return data frame and update frame end
     const DataFrame& Get(int requestedChunkLength) {
         if(df_.frameEnd < df_.bufferEnd) {
