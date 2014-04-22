@@ -108,10 +108,10 @@ using Protocols = std::vector< libwebsocket_protocols >;
 //the proper callback function to use for service instance
 struct HttpService {};
 struct NoHttpService {};
-template < int > struct BoolToType {
+template < bool > struct BoolToType {
     typedef NoHttpService type;
 };
-template <> struct BoolToType< 0 > {
+template <> struct BoolToType< true > {
     typedef HttpService type;
 };
 //SFINAE
@@ -119,7 +119,7 @@ template < typename T > struct IsHttp {
     typedef char yes[1];
     typedef char no[2];
     template < typename S >
-    static const yes& Check(const typename S::HTTP*);
+    static const yes& Check(typename S::HTTP*);
     template < typename S >
     static const no& Check(...);
     typedef typename BoolToType< sizeof(Check< T >(0)) 
@@ -382,7 +382,8 @@ private:
     ///Create a new protocol->service mapping
     template < typename ContextT, typename ArgT, typename...ArgsT >
     void AddHandlers(const ArgT& entry, const ArgsT&...entries) {
-        AddHandler< ContextT >(entry, typename IsHttp< ArgT >::type());
+        AddHandler< ContextT >(entry, typename IsHttp< 
+            typename ArgT::ServiceType >::type());
         AddHandlers< ContextT >(entries...);
     }
     template < typename ContextT, typename ArgT >

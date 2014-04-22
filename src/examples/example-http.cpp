@@ -74,7 +74,6 @@ public:
                 mimeType_ = wsp::GetMimeType(
                     wsp::FileExtension(wsp::Get(m, "GET URI")));
                 filePath_ = filePathRoot + wsp::Get(m, "GET URI");
-                cout << filePath_ << '\n' << mimeType_ << endl;
             } else ComposeResponse(MapToString(m) + "<br/>" + string(BODY)); 
         }
         

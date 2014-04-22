@@ -49,6 +49,8 @@
 #include "../../WebSocketService.h"
 #include "../../Context.h"
 #include "../SessionService.h"
+#include "../../http.h"
+ #include "../../DataFrame.h"
 
 using namespace std;
 
@@ -534,6 +536,7 @@ class ImageService : public SessionService< wsp::Context< Image > > {
 
     using Context = wsp::Context< Image >;
 public:
+
     using DataFrame = SessionService::DataFrame;
     ImageService(Context* c) :
      SessionService(c), ctx_(c) {
@@ -602,6 +605,111 @@ private:
     bool dontSendIfEqual_ = true;
     vector< char > in_;
 };
+
+//------------------------------------------------------------------------------
+std::string MapToString(
+    const std::unordered_map< std::string, std::string >& m,
+    const std::string& pre = "",
+    const std::string& post = "<br/>") {
+    std::ostringstream oss;
+    for(auto& i: m) {
+        oss << pre << i.first << ": " << i.second << post;
+    }
+    return oss.str();
+}
+
+std::string GetHomeDir() {
+    const std::string h 
+#ifdef WIN32
+        = std::string(getenv("HOMEDRIVE")
+                      + "/" //passing path to libwebsockets no need to convert
+                      + std::string(getenv("HOMEPATH"));
+#else
+        = getenv("HOME");
+#endif 
+    return h;       
+}
+
+class HttpService {
+public:
+    using HTTP = int; //mark as http service
+    using DataFrame = wsp::DataFrame;
+    HttpService(wsp::Context<Image>* , const char* req, size_t len,
+                const wsp::Request& m) :
+    df_(nullptr, nullptr, nullptr, nullptr, false), reqHeader_(m) {
+        request_.resize(len + 1);
+        request_.assign(req, req + len);
+        request_.push_back('\0');
+        const string filePathRoot = GetHomeDir();
+        if(wsp::Has(m, "GET URI")) {
+            if(!wsp::FileExtension(wsp::Get(m, "GET URI")).empty()) {
+                mimeType_ = wsp::GetMimeType(
+                    wsp::FileExtension(wsp::Get(m, "GET URI")));
+                filePath_ = filePathRoot + wsp::Get(m, "GET URI");
+            } else ComposeResponse(MapToString(m) + "<br/>" + string(BODY)); 
+        }
+        
+    }
+    //Constructor(Context, unordered_map<string, string> headers)
+    bool Valid() const { return true; }
+    //return data frame and update frame end
+    const DataFrame& Get(int requestedChunkLength) {
+        if(df_.frameEnd < df_.bufferEnd) {
+           sending_ = true;
+           //frameBegin *MUST* be updated in the UpdateOutBuffer method
+           //because in case the consumed data is less than requestedChunkLength
+           df_.frameEnd += min((ptrdiff_t) requestedChunkLength, 
+                               df_.bufferEnd - df_.frameEnd);
+        } else {
+           InitDataFrame();
+           sending_ = false;
+        }
+        return df_;  
+    }
+    bool Sending() const { return sending_; }
+    //update frame begin/end
+    void UpdateOutBuffer(int bytesConsumed) {
+        df_.frameBegin += bytesConsumed;
+        df_.frameEnd = df_.frameBegin;
+    }
+    bool Data() const { return true; }
+    int GetSuggestedOutChunkSize() const { return 0x1000; }
+    const string& FilePath() const { return filePath_; }
+    const string& Headers() const { return headers_; }
+    const string& FileMimeType() const { return mimeType_; }
+private:
+    void InitDataFrame() const {
+        df_.bufferBegin = &response_[0];
+        df_.bufferEnd = &response_[0] + response_.size();
+        df_.frameBegin = df_.bufferBegin;
+        df_.frameEnd = df_.frameBegin;
+    }
+    void ComposeResponse(const std::string& data) {
+         const string h = string("HTTP/1.0 200 OK\x0d\x0a"
+                         "Server: websockets+\x0d\x0a"
+                         "Content-Type: text/html\x0d\x0a" 
+                         "Content-Length: ") 
+                         + to_string(data.size())
+                         + string("\x0d\x0a\x0d\x0a") + data;   
+
+        response_.resize(h.size());
+        response_.assign(h.begin(), h.end());
+        InitDataFrame();   
+    }
+private:
+    mutable bool sending_ = false; 
+    string filePath_;
+    string mimeType_;
+    string headers_;
+    vector< char > request_;
+    vector< char > response_;
+    std::unordered_map< string, string > reqHeader_;
+    static const char* BODY;
+    mutable DataFrame df_;
+};
+const char* HttpService::BODY =
+        "<!DOCTYPE html><head></head><html><body><p><em>Hello</em></p></body><"
+        "/html>"; 
 
 //------------------------------------------------------------------------------
 int main(int argc, char** argv)
@@ -732,6 +840,7 @@ int main(int argc, char** argv)
     //==========================================================================
     using WSS = wsp::WebSocketService;
     WSS imageStreamer;
+    //HTTP SERVICE MUST ALWAYS BE THE FIRST !!!!
     //WSS::ResetLogLevels(); 
     //init service
     auto is = async(launch::async, [](WSS& imageStreamer){
@@ -740,6 +849,8 @@ int main(int argc, char** argv)
                            nullptr, //SSL key path
                            context, //context instance,
                            //will be copied internally
+                           WSS::Entry< HttpService,
+                                       WSS::ASYNC_REP>("http-only"),
                            WSS::Entry< ImageService,
                                        WSS::ASYNC_REP >("image-stream"));
          //start event loop: one iteration every >= 50ms
