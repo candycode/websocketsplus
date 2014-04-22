@@ -145,6 +145,7 @@ int main(int, char**) {
     WSS ws;
     using Service = HttpService;
     //init service
+    //HTTP SERVICE MUST ALWAYS BE THE FIRST !!!!
     ws.Init(8001, //port
             nullptr, //SSL certificate path
             nullptr, //SSL key path
