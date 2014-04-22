@@ -22,10 +22,10 @@
 
 #include <libwebsockets.h>
 
+#include "http.h"
 
 namespace wsp {
-std::unordered_map< std::string, std::string >
-ParseHttpHeader(libwebsocket *wsi) {
+Request ParseHttpHeader(libwebsocket *wsi) {
     //copied from test-server.c part of libwebsockets distribution.
     static const char *tokenNames[] = {
         /*[WSI_TOKEN_GET_URI]       =*/ "GET URI",
@@ -69,7 +69,7 @@ ParseHttpHeader(libwebsocket *wsi) {
         /*[WSI_TOKEN_MUXURL]    =*/ "MuxURL",
     };
     std::vector< char > buf(0x400);
-    std::unordered_map< std::string, std::string > hm;
+    Request hm;
     for (int n = 0; n < sizeof(tokenNames) / sizeof(tokenNames[0]); ++n) {
         if(!lws_hdr_total_length(wsi, lws_token_indexes(n))) continue;         
         lws_hdr_copy(wsi, &buf[0], buf.size(), lws_token_indexes(n));
@@ -93,15 +93,13 @@ std::vector< std::string > Split(const std::string& p,
     return v;
 }
 
-std::vector< std::string > UriPath(const std::string& p) {
+URIPath UriPath(const std::string& p) {
     return Split(p, "/");   
 }
 
-std::unordered_multimap< std::string, std::string >
-UriParameters(const std::string& p) {
+URIParameters UriParameters(const std::string& p) {
     std::vector< std::string > params(Split(p, ";"));
-    using ParamsMap = std::unordered_multimap< std::string, std::string >;
-    ParamsMap m;
+    URIParameters m;
     for(auto& i: params) {
         const std::vector< std::string > kv = Split(i, "=");
         if(kv.size() < 1) throw std::range_error("Invalid URI parameter");
@@ -116,5 +114,15 @@ std::string FileExtension(const std::string& p) {
     return std::string(p, d + 1, std::string::npos);    
 }
 
+bool Has(const Request& req, const std::string& k) {
+    if(req.find(k) == req.end()) return false;
+    return true;
+}
+
+const std::string& Get(const Request& req, const std::string& k) {
+    static const std::string emptyString;
+    if(!Has(req, k)) return emptyString;
+    return req.find(k)->second;
+}
 
 }

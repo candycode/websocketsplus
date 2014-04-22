@@ -21,11 +21,15 @@
 
 namespace wsp {
 
-std::vector< std::string > UriPath(const std::string& p); 
+using URIPath = std::vector< std::string >;
+using Request = std::unordered_map< std::string, std::string >;
+using URIParameters = std::unordered_multimap< std::string, std::string >;
 
-std::unordered_multimap< std::string, std::string >
-    UriParameters(const std::string& p);
-
-std::string FileExtension(const std::string& );
+URIPath UriPath(const std::string& path); 
+bool Has(const Request& req, const std::string& key);
+const std::string& Get(const Request& req, const std::string& key);
+URIParameters UriParameters(const std::string& params);
+std::string FileExtension(const std::string& filepath);
+const std::string& GetMimeType(const std::string& ext);
 
 }

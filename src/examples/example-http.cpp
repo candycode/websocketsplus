@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+//g++ -std=c++11 ../src/WebSocketService.cpp ../src/http.cpp ../src/mimetypes.cpp ../src/examples/example-http.cpp -L /usr/local/libwebsockets/lib -I /usr/local/libwebsockets/include -lwebsockets -pthread -O3 -o http.exe
+
 //Http service example
 
 #include <iostream>
@@ -26,6 +28,7 @@
 #include "../WebSocketService.h"
 #include "../Context.h"
 #include "../DataFrame.h"
+#include "../http.h"
 
 using namespace std;
 
@@ -41,6 +44,18 @@ std::string MapToString(
     return oss.str();
 }
 
+std::string GetHomeDir() {
+    const std::string h 
+#ifdef WIN32
+        = std::string(getenv("HOMEDRIVE")
+                      + "/" //passing path to libwebsockets no need to convert
+                      + std::string(getenv("HOMEPATH"));
+#else
+        = getenv("HOME");
+#endif 
+    return h;       
+}
+
 class HttpService {
 public:
     static const int HTTP = 1; //value can be anything; HTTP member checked
@@ -48,17 +63,21 @@ public:
                                //http
     using DataFrame = wsp::DataFrame;
     HttpService(wsp::Context<>* , const char* req, size_t len,
-                const unordered_map< string, string >& m) :
+                const wsp::Request& m) :
     df_(nullptr, nullptr, nullptr, nullptr, false), reqHeader_(m) {
         request_.resize(len + 1);
         request_.assign(req, req + len);
         request_.push_back('\0');
-#if SERVE_FILE 
-        filePath_ = "../src/examples/example-streaming.html";
-        mimeType_ = "text/html";
-#else        
-        ComposeResponse(MapToString(m) + "<br/>" + string(BODY));
-#endif        
+        const string filePathRoot = GetHomeDir();
+        if(wsp::Has(m, "GET URI")) {
+            if(!wsp::FileExtension(wsp::Get(m, "GET URI")).empty()) {
+                mimeType_ = wsp::GetMimeType(
+                    wsp::FileExtension(wsp::Get(m, "GET URI")));
+                filePath_ = filePathRoot + wsp::Get(m, "GET URI");
+                cout << filePath_ << '\n' << mimeType_ << endl;
+            } else ComposeResponse(MapToString(m) + "<br/>" + string(BODY)); 
+        }
+        
     }
     //Constructor(Context, unordered_map<string, string> headers)
     bool Valid() const { return true; }
@@ -94,17 +113,6 @@ private:
         df_.frameBegin = df_.bufferBegin;
         df_.frameEnd = df_.frameBegin;
     }
-    void ParseFilePath(const std::vector< char >& req) {
-        // std::vector< char >::reverse_const_iterator i = 
-        //     std::find(req.rbegin(), req.rend(), '.');
-        // if(i == req.rend()) return;
-        // const char* c = &(--i.base());
-        // const std::string ext = (c + 1, &req[req.size() - 1]);
-        // if(ext == "jpg") {
-        //     mimeType_ = "image/jpeg";
-        // } 
-
-    }    
     void ComposeResponse(const std::string& data) {
          const string h = string("HTTP/1.0 200 OK\x0d\x0a"
                          "Server: websockets+\x0d\x0a"
