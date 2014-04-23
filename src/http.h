@@ -31,5 +31,6 @@ const std::string& Get(const Request& req, const std::string& key);
 URIParameters UriParameters(const std::string& params);
 std::string FileExtension(const std::string& filepath);
 const std::string& GetMimeType(const std::string& ext);
+int GetContentSize(const Request&);
 
 }

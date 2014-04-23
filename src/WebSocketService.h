@@ -19,7 +19,6 @@
 //WebSocket service: map protocols to user defined services and handle
 //client-server communication in synchronous or asynchronous way
 
-#include <iostream>
 #include <string>
 #include <memory>
 #include <cstring>
@@ -226,7 +225,7 @@ public:
         Clear();
         if(certPath) certPath_ = certPath;
         if(keyPath) keyPath_  = keyPath; 
-        AddHandlers< ContextT >(entries...); 
+        AddHandlers< ContextT >(0, entries...); 
         protocolHandlers_.push_back({0,0,0,0}); //termination marker
         info_.port = port;
         info_.iface = nullptr;
@@ -265,7 +264,7 @@ public:
         Clear();
         if(certPath) certPath_ = certPath;
         if(keyPath) keyPath_  = keyPath; 
-        AddHandlers< ContextT >(entries...); 
+        AddHandlers< ContextT >(0, entries...); 
         protocolHandlers_.push_back({0,0,0,0}); //termination marker
         info_.port = port;
         info_.iface = nullptr;
@@ -381,13 +380,13 @@ private:
     }
     ///Create a new protocol->service mapping
     template < typename ContextT, typename ArgT, typename...ArgsT >
-    void AddHandlers(const ArgT& entry, const ArgsT&...entries) {
-        AddHandler< ContextT >(entry, typename IsHttp< 
+    void AddHandlers(int pos, const ArgT& entry, const ArgsT&...entries) {
+        AddHandler< ContextT >(pos, entry, typename IsHttp< 
             typename ArgT::ServiceType >::type());
-        AddHandlers< ContextT >(entries...);
+        AddHandlers< ContextT >(pos, entries...);
     }
     template < typename ContextT, typename ArgT >
-    void AddHandler(const ArgT& entry, const NoHttpService&) {
+    void AddHandler(int pos, const ArgT& entry, const NoHttpService&) {
         libwebsocket_protocols p;
         p.name = new char[entry.name.size() + 1];
         p.rx_buffer_size = entry.rxBufSize;
@@ -401,7 +400,7 @@ private:
         protocolHandlers_.push_back(p);
     }
     template < typename ContextT, typename ArgT >
-    void AddHandler(const ArgT& entry, const HttpService&) {
+    void AddHandler(int pos, const ArgT& entry, const HttpService&) {
         libwebsocket_protocols p;
         p.name = new char[entry.name.size() + 1];
         p.rx_buffer_size = entry.rxBufSize;
@@ -413,11 +412,13 @@ private:
         p.callback = &WebSocketService::HttpCallback< ContextT,
                                                 typename ArgT::ServiceType >;
         p.per_session_data_size = sizeof(typename ArgT::ServiceType);
-        protocolHandlers_.push_back(p);                                        
+        //http service *MUST* be the first
+        if(pos != 0) protocolHandlers_.insert(protocolHandlers_.begin(), p);
+        else protocolHandlers_.push_back(p);                                        
     }
     ///Termination condition for variadic templates
     template < typename T >
-    void AddHandlers() {}
+    void AddHandlers(int) {}
     ///Actual callback function passed to libwebsocket to handle the
     ///WebSockets protocol communication
     /// @tparam ContextT shared context
@@ -472,7 +473,6 @@ private:
         while(!done) {
             const DF df = s->Get(chunkSize);    
             const size_t bsize = df.frameEnd - df.frameBegin;
-            //std::cout << size_t(df.frameEnd - df.frameBegin) << std::endl;
             done = df.frameEnd == df.bufferEnd;
             const bool begin = df.frameBegin == df.bufferBegin;
             const size_t bytesToWrite = s->PreformattedBuffer() 
@@ -672,47 +672,57 @@ int WebSocketService::HttpCallback(
                void *user,
                void *in,
                size_t len) {
+
+    int status = 0;
     switch (reason) {
     case LWS_CALLBACK_HTTP: {
         if (len < 1) {
             libwebsockets_return_http_status(context, wsi,
                         HTTP_STATUS_BAD_REQUEST, NULL);
-            return -1;
+            status = -1;
+            break;
         }
         C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
         c->InitSession(user);
         new (user) S(c,(const char *) in, len, ParseHttpHeader(wsi));
-        const S* s = reinterpret_cast< const S* >(user);
+        S* s = reinterpret_cast< S* >(user);
         /* this server has no concept of directories */
         if(!s->Valid()) {
             libwebsockets_return_http_status(context, wsi,
                         HTTP_STATUS_FORBIDDEN, NULL);
-            return -1;
+            status = -1;
+            break;
         }
         //if a legal POST URL, let it continue and accept data
-        if(lws_hdr_total_length(wsi, WSI_TOKEN_POST_URI))
-            return 0;
+        if(lws_hdr_total_length(wsi, WSI_TOKEN_POST_URI)) {
+            s->ReceiveStart();
+            break;
+        }
+
         if(!s->FilePath().empty()) {
             //async, won't stop thread
-            if(libwebsockets_serve_http_file(context, wsi, s->FilePath().c_str(),
-                                         s->FileMimeType().c_str(), nullptr))
-                return -1; //return if file sent or error
+            if(libwebsockets_serve_http_file(context, wsi,
+                                             s->FilePath().c_str(),
+                                             s->FileMimeType().c_str(),
+                                             nullptr)) {
+                status = -1; //stop anyway: either error or file sent
+                break;
+            }
         } else {
-            //should I send header here ??
-            libwebsocket_callback_on_writable(context, wsi);
+           libwebsocket_callback_on_writable(context, wsi);
         }
         }
         break;
     case LWS_CALLBACK_HTTP_BODY:
-        //response already prepared in constructor
+        reinterpret_cast< S* >(user)->Receive(len, in);
         break;
     case LWS_CALLBACK_HTTP_BODY_COMPLETION:
-        std::cout << "LWS_CALLBACK_HTTP_WRITEABLE" << std::endl;      
-        return -1;
+        reinterpret_cast< S* >(user)->ReceiveComplete(len, in);
+        libwebsockets_return_http_status(context, wsi, HTTP_STATUS_OK, NULL);
+        status = -1;
         break;
     case LWS_CALLBACK_HTTP_FILE_COMPLETION:
-        //TBD
-        return -1;
+        status = -1;
         break;
     case LWS_CALLBACK_HTTP_WRITEABLE: {
         const bool allSent = HttpSend< C, S >(context, wsi, user);
@@ -720,14 +730,20 @@ int WebSocketService::HttpCallback(
         if(!allSent || s->Sending()) {
             libwebsocket_set_timeout(wsi, PENDING_TIMEOUT_HTTP_CONTENT, 5);
             libwebsocket_callback_on_writable(context, wsi);
-        } else return -1;
+        } else {
+            status = -1;
+            break;
+        }
     }
-        break;
+    break;    
     default:
         break;
     }
-
-    return 0;
+    if(status == -1) {
+        reinterpret_cast< S* >(user)->Destroy();
+        reinterpret_cast< C* >(libwebsocket_context_user(context))->Clear(user);    
+    }
+    return status;
 }
 
 

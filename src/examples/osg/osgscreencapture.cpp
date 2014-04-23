@@ -677,6 +677,7 @@ public:
     const string& FilePath() const { return filePath_; }
     const string& Headers() const { return headers_; }
     const string& FileMimeType() const { return mimeType_; }
+    void Destroy() {}
 private:
     void InitDataFrame() const {
         df_.bufferBegin = &response_[0];

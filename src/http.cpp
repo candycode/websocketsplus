@@ -98,7 +98,7 @@ URIPath UriPath(const std::string& p) {
 }
 
 URIParameters UriParameters(const std::string& p) {
-    std::vector< std::string > params(Split(p, ";"));
+    std::vector< std::string > params(Split(p, "&"));
     URIParameters m;
     for(auto& i: params) {
         const std::vector< std::string > kv = Split(i, "=");
@@ -123,6 +123,13 @@ const std::string& Get(const Request& req, const std::string& k) {
     static const std::string emptyString;
     if(!Has(req, k)) return emptyString;
     return req.find(k)->second;
+}
+
+int GetContentSize(const Request& req) {
+    if(!Has(req, "Content-Length:")) return -1;
+    const std::string l = Get(req, "Content-length:");
+    if(l.empty()) return -1;
+    return std::stoi(l);
 }
 
 }
