@@ -678,7 +678,6 @@ public:
     bool Data() const { return true; }
     int GetSuggestedOutChunkSize() const { return 0x1000; }
     const string& FilePath() const { return filePath_; }
-    const string& Headers() const { return headers_; }
     const string& FileMimeType() const { return mimeType_; }
     void Destroy() {}
     void ReceiveStart(size_t len, void* in) {}
@@ -707,7 +706,6 @@ private:
     mutable bool sending_ = false; 
     string filePath_;
     string mimeType_;
-    string headers_;
     vector< char > request_;
     vector< char > response_;
     std::unordered_map< string, string > reqHeader_;

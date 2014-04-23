@@ -59,7 +59,7 @@ using Protocols = std::vector< libwebsocket_protocols >;
 // void Clear(void* user) 
 
 
-//Service:
+//WebSockets Service:
 // /// Deleted default constructor; object must always be created by a
 // /// placement new with the Service(Context*) constructor.
 // SessionService() = delete;
@@ -103,7 +103,57 @@ using Protocols = std::vector< libwebsocket_protocols >;
 // /// Minimum delay between consecutive writes in seconds.
 // virtual std::chrono::duration< double > MinDelayBetweenWrites() const
 
-//types to detect the presence of an HTTP member inside a type to select
+//Http Service:
+// using HTTP = int; //mark as http service
+// using DataFrame = wsp::DataFrame;
+// ///Constructor: one instance per http request created
+// ///@param c context
+// ///@param req request bytes
+// ///@param request length in number of bytes
+// ///@param m request stored as a key-value store
+// HttpService(wsp::Context<>* c, const char* req, size_t len,
+//             const wsp::Request& m);
+// ///Check if requested passed to constructor is valid
+// bool Valid() const;
+// ///Return data frame containing data to send to client
+// const DataFrame& Get(int requestedChunkLength);
+// ///Return @c true if still in sending phase, @c false otherwise
+// bool Sending();
+// ///Update data frame boundaries
+// ///@param bytesConsumed number of bytes actually sent to client
+// void UpdateOutBuffer(int bytesConsumed);
+// ///Check if data available
+// bool Data() const;
+// ///Return suggested chunk size; the returned value can be adapted to the
+// ///current communication channel by e.g. storing the number of bytes
+// ///requested in the Get() method and comparing the number with the actual
+// ///bytes sent
+// int GetSuggestedOutChunkSize() const;
+// ///Return file path of file to send; return empty string if no file is
+// ///sent
+// const string& FilePath() const;
+// ///Return file mime type
+// const string& FileMimeType() const;
+// ///Cleanup resources: object is allocated through placement new so
+// ///cleanup takes place only through this method
+// void Destroy();
+// ///Signals start of a receive operation through http POST; the actual
+// ///request and header are passed to the constructor and can be stored
+// ///accordingly without the need to handle them from within this method.
+// ///@param len copied over from libwebsockets, can be discarded
+// ///@param in copied over from libwebsockets, can be discarded
+// void ReceiveStart(size_t len, void* in);
+// ///Called with a new chunk of data after the start of an http POST operation
+// ///@param len size in bytes of received buffer
+// ///@param in received buffer
+// void Receive(size_t len, void* in);
+// ///Signals the end of a receive operation through http POST
+// ///@param len copied over from libwebsockets, can be discarded
+// ///@param in copied over from libwebsockets, can be discarded
+// void ReceiveComplete(int len, void* in);
+//------------------------------------------------------------------------------
+
+//types to detect the presence of an HTTP member type inside a type to select
 //the proper callback function to use for service instance
 struct HttpService {};
 struct NoHttpService {};
@@ -354,7 +404,7 @@ public:
         else return levels_.find(lws_log_levels(ll))->second;
     }
 private:
-    /// 
+    ///Configure log levels
     template < typename T, typename... S >
     static lws_log_levels ComposeLogLevels(lws_log_levels prev,
                                     const T& l, const S&... rest) {
@@ -385,6 +435,7 @@ private:
             typename ArgT::ServiceType >::type());
         AddHandlers< ContextT >(pos, entries...);
     }
+    ///Add handler: non-http case
     template < typename ContextT, typename ArgT >
     void AddHandler(int pos, const ArgT& entry, const NoHttpService&) {
         libwebsocket_protocols p;
@@ -399,6 +450,7 @@ private:
         p.per_session_data_size = sizeof(typename ArgT::ServiceType);
         protocolHandlers_.push_back(p);
     }
+    ///Add handler: http case
     template < typename ContextT, typename ArgT >
     void AddHandler(int pos, const ArgT& entry, const HttpService&) {
         libwebsocket_protocols p;
@@ -657,8 +709,6 @@ int WebSocketService::WSCallback(
 
     return 0;
 }
-
-
 
 //------------------------------------------------------------------------------
 std::unordered_map< std::string, std::string >

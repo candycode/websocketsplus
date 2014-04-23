@@ -17,7 +17,7 @@
 
 //g++ -std=c++11 ../src/WebSocketService.cpp ../src/http.cpp ../src/mimetypes.cpp ../src/examples/example-http.cpp -L /usr/local/libwebsockets/lib -I /usr/local/libwebsockets/include -lwebsockets -pthread -O3 -o http.exe
 
-//Http service example
+//PLACE HOLDER FOR DEFAULT HTTP SERVICE IMPLEMENTATION
 
 #include <iostream>
 #include <unordered_map>
@@ -104,7 +104,6 @@ public:
     bool Data() const { return true; }
     int GetSuggestedOutChunkSize() const { return 0x1000; }
     const string& FilePath() const { return filePath_; }
-    const string& Headers() const { return headers_; }
     const string& FileMimeType() const { return mimeType_; }
     void Destroy() {}
     void ReceiveStart(size_t len, void* in) {}
@@ -133,7 +132,6 @@ private:
     mutable bool sending_ = false; 
     string filePath_;
     string mimeType_;
-    string headers_;
     vector< char > request_;
     vector< char > response_;
     std::unordered_map< string, string > reqHeader_;

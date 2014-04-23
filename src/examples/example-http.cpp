@@ -56,11 +56,17 @@ std::string GetHomeDir() {
     return h;       
 }
 
+///Http request handler: one instance per request
 class HttpService {
 public:
     using HTTP = int; //mark as http service
     using DataFrame = wsp::DataFrame;
-    HttpService(wsp::Context<>* , const char* req, size_t len,
+    ///Constructor: one instance per http request created
+    ///@param c context
+    ///@param req request bytes
+    ///@param request length in number of bytes
+    ///@param m request stored as a key-value store
+    HttpService(wsp::Context<>* c, const char* req, size_t len,
                 const wsp::Request& m) :
     df_(nullptr, nullptr, nullptr, nullptr, false), reqHeader_(m) {
         request_.resize(len + 1);
@@ -79,9 +85,9 @@ public:
         }
         
     }
-    //Constructor(Context, unordered_map<string, string> headers)
+    ///Check if requested passed to constructor is valid
     bool Valid() const { return true; }
-    //return data frame and update frame end
+    ///Return data frame containing data to send to client
     const DataFrame& Get(int requestedChunkLength) {
         if(df_.frameEnd < df_.bufferEnd) {
            sending_ = true;
@@ -95,22 +101,44 @@ public:
         }
         return df_;  
     }
+    ///Return @c true if still in sending phase, @c false otherwise
     bool Sending() const { return sending_; }
-    //update frame begin/end
+    ///Update data frame boundaries
+    ///@param bytesConsumed number of bytes actually sent to client
     void UpdateOutBuffer(int bytesConsumed) {
         df_.frameBegin += bytesConsumed;
         df_.frameEnd = df_.frameBegin;
     }
+    ///Check if data available
     bool Data() const { return true; }
+    ///Return suggested chunk size; the returned value can be adapted to the
+    ///current communication channel by e.g. storing the number of bytes
+    ///requested in the Get() method and comparing the number with the actual
+    ///bytes sent
     int GetSuggestedOutChunkSize() const { return 0x1000; }
+    ///Return file path of file to send; return empty string if no file is sent
     const string& FilePath() const { return filePath_; }
-    const string& Headers() const { return headers_; }
+    ///Return file mime type
     const string& FileMimeType() const { return mimeType_; }
+    ///Cleanup resources: object is allocated through placement new so cleanup
+    ///takes place only through this method
     void Destroy() {}
+    ///Signals start of a receive operation through http POST; the actual
+    ///request and header are passed to the constructor and can be stored
+    ///accordingly without the need to handle them from within this method.
+    ///@param len copied over from libwebsockets, can be discarded
+    ///@param in copied over from libwebsockets, can be discarded
     void ReceiveStart(size_t len, void* in) {}
+    ///Called with a new chunk of data after the start of an http POST operation
+    ///@param len size in bytes of received buffer
+    ///@param in received buffer
     void Receive(size_t len, void* in) {}
+    ///Signals the end of a receive operation through http POST
+    ///@param len copied over from libwebsockets, can be discarded
+    ///@param in copied over from libwebsockets, can be discarded
     void ReceiveComplete(int len, void* in) {}
 private:
+    ///Initialize output data frame boundaries
     void InitDataFrame() const {
         df_.bufferBegin = &response_[0];
         df_.bufferEnd = &response_[0] + response_.size();
@@ -133,7 +161,6 @@ private:
     mutable bool sending_ = false; 
     string filePath_;
     string mimeType_;
-    string headers_;
     vector< char > request_;
     vector< char > response_;
     std::unordered_map< string, string > reqHeader_;
