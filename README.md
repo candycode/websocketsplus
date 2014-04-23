@@ -2,12 +2,12 @@ Websockets+
 ===========
 
 C++11 web socket service based on [libwebsockets](https://github.com/warmcat/libwebsockets) 
+Websocket+ is distributed under the terms of the GNU Lesser General Public License version 3. A copy of the license is distributed together with the source code; check
+the files LICENSE and LICENSE.lesser for details.
 
-Websocket+ is distributed under the terms of the GNU Lesser General Public License version 3.
+Examples are under src/examples.  
 
-Check out the examples under src/examples for usage information.  
-
-The framework is split into three files:
+The basic framework is split into three files:
 
 * Context.h - context shared among per-session service instances
 * WebSocketService.h - class that holds instances of libwebsockets types and
@@ -42,6 +42,29 @@ ways of implementing it:
 
 It is possible (and advisable) to set the minimum time between send calls
 through a throttling parameter (see src/examples/example-streaming.cpp).
+
+HTTP
+----
+
+Websockets+ also implements a basic HTTP service. To simplify HTTP handling
+a number of utility functions are provided in the following files:
+
+* http.h/cpp: HTTP request parsing
+* mimetypes.cpp: file extension -> mime type map
+
+The provided *libwebsockets* callback function creates new request handler
+instances and invokes methods on the request handling objects.
+
+See src/examples/example-http.cpp for a sample http service implementation that
+can either reply back with html or return the file specified in the request URL.
+
+
+
+
+
+
+
+
 
 
 
