@@ -705,7 +705,7 @@ int WebSocketService::HttpCallback(
                                              s->FilePath().c_str(),
                                              s->FileMimeType().c_str(),
                                              nullptr)) {
-                status = -1; //stop anyway: either error or file sent
+                //status = -1; //stop anyway: either error or file sent
                 break;
             }
         } else {
