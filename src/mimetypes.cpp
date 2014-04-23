@@ -1,7 +1,24 @@
+// Websockets+ : C++11 server-side websocket library based on libwebsockets;
+//               supports easy creation of services and built-in throttling
+// Copyright (C) 2014  Ugo Varetto
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string>
 #include <unordered_map>
 namespace wsp {
-static const std::unordered_map< std::string, std::string > EXTENSION_TO_MIMETYPE =
+static const std::unordered_map< std::string, std::string >
+    EXTENSION_TO_MIMETYPE =
 {{"323", "text/h323"},
 {"*", "application/octet-stream"},
 {"acx", "application/internet-property-stream"},

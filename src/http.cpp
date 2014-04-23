@@ -19,6 +19,9 @@
 #include <unordered_map>
 #include <vector>
 #include <stdexcept>
+#include <chrono>
+#include <ctime>
+#include <sstream>
 
 #include <libwebsockets.h>
 
@@ -131,5 +134,35 @@ int GetContentSize(const Request& req) {
     if(l.empty()) return -1;
     return std::stoi(l);
 }
+
+//note: when name=made_write_conn cookie lasts until the browser is closed
+//      when name=reg_fb_gate=deleted and date in the past cookie is deleted
+//      immediately by client 
+std::string CreateCookie(const std::unordered_map< std::string, std::string>& m)
+{
+    std::ostringstream os;
+    if(m.find("name") == m.end())
+        throw std::logic_error("No name specified for cookie");
+    if(m.find("value") == m.end())
+        throw std::logic_error("No name value specified for cookie");
+    os << m.find("name")->second << "=" << m.find("value")->second << ";";
+    if(m.find("path") != m.end()) os << " Path=" << m.find("path")->second << ";";
+    if(m.find("domain") != m.end()) os << " Domain=" << m.find("domain")->second << ";";
+    if(m.find("expires") != m.end()) os << " Expires=" << m.find("expires")->second << ";";
+    if(m.find("secure") != m.end()) os << " Secure;";
+    if(m.find("http-only") != m.end()) os << " HttpOnly;";
+    return os.str();
+}
+
+std::string CreateTime(int h, int m, int s) {
+    using namespace std;
+    using namespace std::chrono;
+    const long int offsetInSeconds(24 * h + 60 * m + s);
+    system_clock::time_point now = system_clock::now();
+    const std::time_t t = system_clock::to_time_t(
+                                                now + seconds(offsetInSeconds));
+    return ctime(&t);
+}
+
 
 }
