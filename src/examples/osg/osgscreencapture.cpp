@@ -641,11 +641,14 @@ public:
         request_.assign(req, req + len);
         request_.push_back('\0');
         const string filePathRoot = GetHomeDir();
-        if(wsp::Has(m, "GET URI")) {
-            if(!wsp::FileExtension(wsp::Get(m, "GET URI")).empty()) {
+        std::string uri;
+        if(wsp::Has(m, "GET URI")) uri = "GET URI";
+        else if(wsp::Has(m, "POST URI")) uri = "POST URI";
+        if(!uri.empty()) {
+            if(!wsp::FileExtension(wsp::Get(m, uri)).empty()) {
                 mimeType_ = wsp::GetMimeType(
-                    wsp::FileExtension(wsp::Get(m, "GET URI")));
-                filePath_ = filePathRoot + wsp::Get(m, "GET URI");
+                    wsp::FileExtension(wsp::Get(m, uri)));
+                filePath_ = filePathRoot + wsp::Get(m, uri);
             } else ComposeResponse(MapToString(m) + "<br/>" + string(BODY)); 
         }
         
@@ -678,6 +681,9 @@ public:
     const string& Headers() const { return headers_; }
     const string& FileMimeType() const { return mimeType_; }
     void Destroy() {}
+    void ReceiveStart(size_t len, void* in) {}
+    void Receive(size_t len, void* in) {}
+    void ReceiveComplete(int len, void* in) {}
 private:
     void InitDataFrame() const {
         df_.bufferBegin = &response_[0];

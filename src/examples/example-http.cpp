@@ -107,7 +107,7 @@ public:
     const string& Headers() const { return headers_; }
     const string& FileMimeType() const { return mimeType_; }
     void Destroy() {}
-    void ReceiveStart() {}
+    void ReceiveStart(size_t len, void* in) {}
     void Receive(size_t len, void* in) {}
     void ReceiveComplete(int len, void* in) {}
 private:
