@@ -1,13 +1,30 @@
-/* -*-c++-*- OpenSceneGraph - Copyright (C) 1998-2006 Robert Osfield 
- *
- * This application is open source and may be redistributed and/or modified   
- * freely and without restriction, both in commercial and non commercial applications,
- * as long as this copyright notice is maintained.
- * 
- * This application is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-*/
+// Websockets+ : C++11 server-side websocket library based on libwebsockets;
+//               supports easy creation of services and built-in throttling
+// Copyright (C) 2014  Ugo Varetto
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+//Streaming OpenSceneGraph viewer window to remote clients; based on
+//osgscreencapture.cpp example, part of OpenSceneGraph distribution.
+//Load html files in examples/image-stream/ and use standard osgviewer mouse
+//and keyboard interaction.
+//You can also connect directly to localhost:5000/<path to html> but in this
+//case you have to change the default web server path to e.g. the root
+//directory of the websockets+ source tree and enter the relative path to the
+//html files.
+
+
 
 #include <osgDB/ReadFile>
 #include <osgDB/WriteFile>
@@ -127,7 +144,8 @@ struct Msg {
         } else if(ReadFile(type)) {
               
             const int len = p[1];
-            const short unsigned* s = (const short unsigned*) &d[2 * sizeof(int)];
+            const unsigned short* s = 
+                (const unsigned short*) &d[2 * sizeof(int)];
             filename = "";
             for(int i = 0; i != len; ++i) {
                filename.push_back((char) s[i]);
