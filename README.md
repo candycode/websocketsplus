@@ -49,7 +49,7 @@ HTTP
 Websockets+ also implements a basic HTTP service. To simplify HTTP handling
 a number of utility functions are provided in the following files:
 
-* http.h/cpp: HTTP request parsing
+* http.h/cpp: HTTP request parsing, cookies...
 * mimetypes.cpp: file extension -> mime type map
 
 The provided *libwebsockets* callback function creates new request handler

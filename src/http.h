@@ -39,7 +39,8 @@ std::string FileExtension(const std::string& filepath);
 ///Return MIME type associated with extension or empty string if no MIME type
 ///found
 const std::string& GetMimeType(const std::string& ext);
-///Return content size if 'Content-lenght' field is present in request header
+///Return content size if 'Content-Length' field is present in request header
+///@c -1 otherwise
 int GetContentSize(const Request&);
 ///Create cookie string
 std::string CreateCookie(const std::unordered_map< std::string,
@@ -50,4 +51,5 @@ std::string CreateCookie(const std::unordered_map< std::string,
 ///@param m minute offset
 ///@param s second offset
 std::string CreateTime(int h, int m, int s);
+
 }

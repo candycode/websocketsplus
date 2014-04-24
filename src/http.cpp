@@ -130,7 +130,7 @@ const std::string& Get(const Request& req, const std::string& k) {
 
 int GetContentSize(const Request& req) {
     if(!Has(req, "Content-Length:")) return -1;
-    const std::string l = Get(req, "Content-length:");
+    const std::string l = Get(req, "Content-Length:");
     if(l.empty()) return -1;
     return std::stoi(l);
 }
