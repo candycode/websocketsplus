@@ -50,9 +50,17 @@
 #include <iostream>
 #include <sstream>
 #include <string.h>
+#include <set>
 
 //g++ -std=c++11  ../src/examples/osg/osgscreencapture.cpp -I /usr/local/osg/include -L /usr/local/osg/lib64 -lOpenThreads -losgDB -losgGA -losgManipulator -losg -losgUtil -losgViewer -losgText -lGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib64  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread osg-stream.exe
-//clang++ -std=c++11  -stdlib=libc++ ../src/examples/osg/osgscreencapture.cpp -I /usr/local/osg/include -L /usr/local/osg/lib -lOpenThreads -losgDB -losgGA -losgManipulator -losg -losgUtil -losgViewer -losgText  -framework OpenGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread -o osg-stream.exe
+//
+//clang++ -std=c++11  -stdlib=libc++ ../src/mimetypes.cpp  ../src/http.cpp
+//../src/WebSocketService.cpp  ../src/examples/osg/osgscreencapture.cpp -I
+///usr/local/osg/include -L /usr/local/osg/lib -lOpenThreads -losgDB -losgGA
+//-losgManipulator -losg -losgUtil -losgViewer -losgText  -framework OpenGL -I
+///opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib  -lturbojpeg -I
+///usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets
+//-O3 -pthread -o osg-stream.ex
 //==============================================================================
 #include <thread>
 #include <future>
@@ -85,17 +93,93 @@ public:
         q_.push_back(move(d));
     }
     bool Empty() const { return q_.empty(); }
-private:    
+private:
     deque< T > q_;
     mutex mutex_;
 
 };
 
-struct TJDeleter {
-    void operator()(char* p) const {
+struct Chunk {
+    size_t size = 0;
+    void* ptr = nullptr;
+    bool operator<(const Chunk& c) const {
+        return size < c.size;
+    }
+    Chunk(size_t s, void* p = nullptr) : size(s), ptr(p) {}
+};
+//------------------------------------------------------------------------------
+template < typename AllocatorT, typename DeleterT >
+class  MemoryPool : AllocatorT, DeleterT {
+    using Allocator = AllocatorT;
+    using Deleter = DeleterT;
+    using Pool = std::set< Chunk >;
+public:
+    template < typename...Args >
+    Chunk Get(Arg...args) {
+        return Allocate(ComputeSize(args...));
+    }
+    Chunk Allocate(size_t sz) {
+        std::lock_guard< std::mutex > quard(mutex_);
+        Pool::iterator i = buffers_.upper_bound(Chunk(sz - 1));
+        ++getCount_;
+        if(i == buffers_.end()) return Chunk(sz, New(sz));
+        else {
+            Chunk c = *i;
+            buffers_.erase(i);
+            return c;
+        }
+    }
+    void Put(size_t sz, void* ptr) {
+        std::lock_guard< std::mutex > quard(mutex_);
+        ++putCount_;
+        buffers_.insert(Chunk(sz, ptr));
+    }
+    void Clear(size_t sz) {
+        std::lock_guard< std::mutex > quard(mutex_);
+        while(buffers_.upper_bound(Chunk(sz - 1)) != buffers_.end()) {
+            Pool::iterator i = buffers_.upper_bound(Chunk(sz - 1));
+            Delete(i->ptr);
+            buffers_.erase(i);
+        }
+    }
+    ~MemoryPool() {
+        Clear(0);
+    }
+    size_t PutCount() const { return putCount_; }
+    size_t GetCount() const { return getCount_; }
+private:
+    std::set< Chunk > buffers_;
+    mutable size_t putCount_ = 0;
+    mutable size_t getCount_ = 0;
+};
+
+
+struct TJDelete {
+    void Delete(void* p) const {
         if(!p) return;
         tjFree((unsigned char*) p);
     }
+};
+
+struct TJAllocate {
+    size_t ComputeSize(int width, int height, int cs) const {
+       return tjBufSize(width, height, cs);
+    } 
+    void* New(size_t size) const {
+        return tjAlloc(size);
+    }
+};
+using TJMemory = MemoryPool< TJDelete, TJAllocate >;
+//------------------------------------------------------------------------------
+struct TJDeleter {
+    using MemoryRef = std::reference_wrapper< TJMemory > ;
+    MemoryRef mem_;
+    size_t size = 0;
+    void operator()(char* p) const {
+        if(!p) return;
+        mem_.get().Put(size, p);
+    }
+    TJDeleter(size_t s, TJMemory& m) : size(s), mem_(m) {}
 };
 
 using ImagePtr = shared_ptr< char >;
@@ -445,6 +529,7 @@ void WindowCaptureCallback::ContextData::singlePBO(
             quality,
             TJXOP_VFLIP );    
             ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
+
             context->SetServiceDataSync(
                     Image(ImagePtr((char*) out, TJDeleter()), size, count++));
         
@@ -470,7 +555,6 @@ void WindowCaptureCallback::ContextData::multiPBO(
                               GL_STREAM_READ);
 
         }
-    
     }
     GLuint& copy_pbo = pboBuffer_[currentPboIndex_];
     GLuint& read_pbo = pboBuffer_[nextPboIndex]; 
@@ -480,50 +564,13 @@ void WindowCaptureCallback::ContextData::multiPBO(
     static GLubyte* src = nullptr;
     src = (GLubyte*)ext->glMapBuffer(GL_PIXEL_PACK_BUFFER_ARB,
                                      GL_READ_ONLY_ARB);
-#ifdef JPG_OWN_THREAD //creating one thread every time, use Executor instead 
-    static future< void > jpg;
-    static bool first = true;
-    static vector< unsigned char > b;
-#endif    
     if(src) {
-        static Image img;
+        static TJMemory mem;
         static int count = 0;
         unsigned long size = 0;
-        char* out = nullptr;
-        size = tjBufSize(width, height, cs);
-        if(img.size < size) {      
-            out = (char*) tjAlloc(size);
-            img.image.reset(out);
-        }
+        static Chunk c;
+        c = mem.Get(width, height, cs);
 
-#ifdef  JPG_OWN_THREAD      
-        if(first) first = false;
-        else jpg.wait();
-        b.resize(byteSize);
-        b.assign(src, src + byteSize);        
-        jpg = async(launch::async, [this, ext, &out, width, height]() {
-            unsigned long size = 0;
-            tjCompress2(tj_,
-            (unsigned char*) &b[0],
-                width,
-                width  * (pixelFormat_ == GL_BGRA ? tjPixelSize[TJPF_RGBA]
-                                                  : tjPixelSize[TJPF_RGB]),
-                height,
-                pixelFormat_ == GL_BGRA ? TJPF_BGRA : TJPF_BGR,
-                (unsigned char **) &out,
-                &size,
-                cs, //444=best quality,
-                    //420=fast and still unnoticeable but MIGHT NOT WORK
-                    //IN SOME BROWSERS
-                quality,
-                TJXOP_VFLIP);           
-           
-            context->SetServiceDataSync(
-                          Image(ImagePtr((char*) out, TJDeleter()), size,
-                                         count++));
-            
-        });
-#else
         tjCompress2(tj_,
             (unsigned char*) src,
             width,
@@ -531,18 +578,17 @@ void WindowCaptureCallback::ContextData::multiPBO(
                                              : tjPixelSize[TJPF_RGB]),
             height,
             pixelFormat_ == GL_BGRA ? TJPF_BGRA : TJPF_BGR,
-            (unsigned char **) &out,
-            &size,
+            (unsigned char **) &c.ptr,
+            size,
             cs, //444=best quality,
-                        //420=fast and still unnoticeable but MIGHT NOT WORK
-                        //IN SOME BROWSERS
+                //420=fast and still unnoticeable but MIGHT NOT WORK
+                //IN SOME BROWSERS
             quality,
-            TJXOP_VFLIP | TJFLAG_FASTDCT);    
-#endif        
+            TJXOP_VFLIP);    
         ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
-        img.size = size;
-        img.id = count++;
-        context->SetServiceDataSyncSwap(img);
+        context->SetServiceDataSync(
+                  Image(ImagePtr((char*) c.ptr, TJDeleter(c.size, mem), 
+                                 size, count++));
     }
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
     currentPboIndex_ = nextPboIndex;
