@@ -52,7 +52,12 @@
 #include <string.h>
 #include <set>
 
-//g++ -std=c++11  ../src/examples/osg/osgscreencapture.cpp -I /usr/local/osg/include -L /usr/local/osg/lib64 -lOpenThreads -losgDB -losgGA -losgManipulator -losg -losgUtil -losgViewer -losgText -lGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib64  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread osg-stream.exe
+//g++ -std=c++11  ../src/examples/osg/osgscreencapture.cpp \
+//-I /usr/local/osg/include -L /usr/local/osg/lib64 -lOpenThreads -losgDB \
+//-losgGA -losgManipulator -losg -losgUtil -losgViewer -losgText -lGL \
+//-I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib64  -lturbojpeg \
+//-I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib \
+//-lwebsockets -O3 -pthread osg-stream.exe
 //
 //clang++ -std=c++11  -stdlib=libc++ ../src/mimetypes.cpp  ../src/http.cpp
 //../src/WebSocketService.cpp  ../src/examples/osg/osgscreencapture.cpp -I
@@ -60,7 +65,7 @@
 //-losgManipulator -losg -losgUtil -losgViewer -losgText  -framework OpenGL -I
 ///opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib  -lturbojpeg -I
 ///usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets
-//-O3 -pthread -o osg-stream.ex
+//-O3 -pthread -o osg-stream.exe
 //==============================================================================
 #include <thread>
 #include <future>
@@ -99,30 +104,33 @@ private:
 
 };
 
+//----------------------------------------------------------------------------
 struct Chunk {
-    size_t size = 0;
+    std::size_t size = 0;
     void* ptr = nullptr;
     bool operator<(const Chunk& c) const {
         return size < c.size;
     }
-    Chunk(size_t s, void* p = nullptr) : size(s), ptr(p) {}
+    Chunk(std::size_t s, void* p = nullptr) : size(s), ptr(p) {}
+    Chunk() = default;
 };
+
 //------------------------------------------------------------------------------
-template < typename AllocatorT, typename DeleterT >
-class  MemoryPool : AllocatorT, DeleterT {
-    using Allocator = AllocatorT;
-    using Deleter = DeleterT;
+template < typename AllocationT,
+           typename DestructionT >
+class  MemoryPool : AllocationT, DestructionT {
+    using Allocator = AllocationT;
+    using Deleter = DestructionT;
     using Pool = std::set< Chunk >;
 public:
     template < typename...Args >
-    Chunk Get(Arg...args) {
-        return Allocate(ComputeSize(args...));
+    Chunk Get(Args...args) {
+        return Allocate(Allocator::ComputeSize(args...));
     }
     Chunk Allocate(size_t sz) {
-        std::lock_guard< std::mutex > quard(mutex_);
         Pool::iterator i = buffers_.upper_bound(Chunk(sz - 1));
         ++getCount_;
-        if(i == buffers_.end()) return Chunk(sz, New(sz));
+        if(i == buffers_.end()) return Chunk(sz, Allocator::New(sz));
         else {
             Chunk c = *i;
             buffers_.erase(i);
@@ -138,7 +146,7 @@ public:
         std::lock_guard< std::mutex > quard(mutex_);
         while(buffers_.upper_bound(Chunk(sz - 1)) != buffers_.end()) {
             Pool::iterator i = buffers_.upper_bound(Chunk(sz - 1));
-            Delete(i->ptr);
+            Deleter::Delete(i->ptr);
             buffers_.erase(i);
         }
     }
@@ -148,12 +156,12 @@ public:
     size_t PutCount() const { return putCount_; }
     size_t GetCount() const { return getCount_; }
 private:
-    std::set< Chunk > buffers_;
-    mutable size_t putCount_ = 0;
-    mutable size_t getCount_ = 0;
+    Pool buffers_;
+    std::mutex mutex_;
+    std::size_t putCount_ = 0;
+    std::size_t getCount_ = 0;
 };
-
-
+//------------------------------------------------------------------------------
 struct TJDelete {
     void Delete(void* p) const {
         if(!p) return;
@@ -162,14 +170,14 @@ struct TJDelete {
 };
 
 struct TJAllocate {
-    size_t ComputeSize(int width, int height, int cs) const {
+    std::size_t ComputeSize(int width, int height, int cs) const {
        return tjBufSize(width, height, cs);
     } 
     void* New(size_t size) const {
         return tjAlloc(size);
     }
 };
-using TJMemory = MemoryPool< TJDelete, TJAllocate >;
+using TJMemory = MemoryPool< TJAllocate, TJDelete >;
 //------------------------------------------------------------------------------
 struct TJDeleter {
     using MemoryRef = std::reference_wrapper< TJMemory > ;
@@ -181,6 +189,7 @@ struct TJDeleter {
     }
     TJDeleter(size_t s, TJMemory& m) : size(s), mem_(m) {}
 };
+//------------------------------------------------------------------------------
 
 using ImagePtr = shared_ptr< char >;
 
@@ -259,6 +268,7 @@ struct Msg {
     int delta = 0;
     string filename;
 };
+
 //------------------------------------------------------------------------------
 int SelectButton(int buttons) {
     if(buttons == 0) return 1;
@@ -361,11 +371,10 @@ void HandleMessage() {
             loadfiles(msg.filename);
         }
         break;
-        default: break;          
+        default: break;
         }
     }
 }
-
 
 
 //------------------------------------------------------------------------------
@@ -436,7 +445,7 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
             void multiPBO(osg::GLBufferObject::Extensions* ext);
             ~ContextData() {
                 tjDestroy(tj_);
-            }            
+            }
             typedef std::vector< GLuint > PBOBuffer;
             osg::GraphicsContext*   gc_;
             Mode                    mode_;
@@ -444,12 +453,11 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
             GLenum                  pixelFormat_;
             GLenum                  type_;
             int                     width_;
-            int                     height_;         
+            int                     height_;
             unsigned int            currentPboIndex_;
             PBOBuffer               pboBuffer_;
             tjhandle                tj_;
         };
-        
         WindowCaptureCallback(Mode mode, GLenum readBuffer):
             mode_(mode),
             readBuffer_(readBuffer) {}  
@@ -460,7 +468,6 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
             OpenThreads::ScopedLock<OpenThreads::Mutex> lock(_mutex);
             osg::ref_ptr<ContextData>& data = _contextDataMap[gc];
             if (!data) data = createContextData(gc);
-            
             return data.get();
         }
         virtual void operator () (osg::RenderInfo& renderInfo) const {
@@ -470,7 +477,7 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
             osg::ref_ptr<ContextData> cd = getContextData(gc);
             cd->read();
         }
-private:        
+private:
         typedef std::map< osg::GraphicsContext*, osg::ref_ptr< ContextData > >
             ContextDataMap;
         Mode                        mode_;     
@@ -481,60 +488,61 @@ private:
 
 void WindowCaptureCallback::ContextData::singlePBO(
                                         osg::GLBufferObject::Extensions* ext) {  
-    int width = 0, height = 0;
-    getSize(gc_, width, height);
-    const int byteSize = width * height * (pixelFormat_ == GL_BGRA ? 4 : 3);   
-    GLuint& pbo = pboBuffer_[0];
-    if (width!=width_ || height_!=height) {
-        width_ = width;
-        height_ = height;
-         if(pbo != 0)  { ext->glDeleteBuffers (1, &pbo); pbo = 0; }
-         if (pbo==0) {
-            ext->glGenBuffers(1, &pbo);
-            ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
-        }
-        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
-                          GL_STREAM_READ);
-    }
-   
-    if(pbo==0) {
-        ext->glGenBuffers(1, &pbo);
-        ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
-        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
-                          GL_STREAM_READ);
-    }
-    else {
-        ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
-    }
-
-    glReadPixels(0, 0, width_, height_, pixelFormat_, type_, 0);
-    GLubyte* src = (GLubyte*)ext->glMapBuffer(GL_PIXEL_PACK_BUFFER_ARB,
-                                              GL_READ_ONLY_ARB);
-    if(src) {
-        static int count = 0;
-        char* out = nullptr;
-        unsigned long size = 0;
-        tjCompress2(tj_,
-            (unsigned char*) src,
-            width,
-            width * (pixelFormat_ == GL_BGRA ? tjPixelSize[TJPF_RGBA] 
-                                             : tjPixelSize[TJPF_RGB]),
-            height,
-            pixelFormat_ == GL_BGRA ? TJPF_BGRA : TJPF_BGR,
-            (unsigned char **) &out,
-            &size,
-            cs, //444=best quality,
-                        //420=fast and still unnoticeable but MIGHT NOT WORK
-                        //IN SOME BROWSERS
-            quality,
-            TJXOP_VFLIP );    
-            ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
-
-            context->SetServiceDataSync(
-                    Image(ImagePtr((char*) out, TJDeleter()), size, count++));
-        
-    }
-    ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
+throw std::logic_error("Single PBO not implemented");
+//    int width = 0, height = 0;
+//    getSize(gc_, width, height);
+//    const int byteSize = width * height * (pixelFormat_ == GL_BGRA ? 4 : 3);   
+//    GLuint& pbo = pboBuffer_[0];
+//    if (width!=width_ || height_!=height) {
+//        width_ = width;
+//        height_ = height;
+//         if(pbo != 0)  { ext->glDeleteBuffers (1, &pbo); pbo = 0; }
+//         if (pbo==0) {
+//            ext->glGenBuffers(1, &pbo);
+//            ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+//        }
+//        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
+//                          GL_STREAM_READ);
+//    }
+//   
+//    if(pbo==0) {
+//        ext->glGenBuffers(1, &pbo);
+//        ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+//        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
+//                          GL_STREAM_READ);
+//    }
+//    else {
+//        ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+//    }
+//
+//    glReadPixels(0, 0, width_, height_, pixelFormat_, type_, 0);
+//    GLubyte* src = (GLubyte*)ext->glMapBuffer(GL_PIXEL_PACK_BUFFER_ARB,
+//                                              GL_READ_ONLY_ARB);
+//    if(src) {
+//        static int count = 0;
+//        char* out = nullptr;
+//        unsigned long size = 0;
+//        tjCompress2(tj_,
+//            (unsigned char*) src,
+//            width,
+//            width * (pixelFormat_ == GL_BGRA ? tjPixelSize[TJPF_RGBA] 
+//                                             : tjPixelSize[TJPF_RGB]),
+//            height,
+//            pixelFormat_ == GL_BGRA ? TJPF_BGRA : TJPF_BGR,
+//            (unsigned char **) &out,
+//            &size,
+//            cs, //444=best quality,
+//                        //420=fast and still unnoticeable but MIGHT NOT WORK
+//                        //IN SOME BROWSERS
+//            quality,
+//            TJXOP_VFLIP );    
+//            ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
+//
+//            context->SetServiceDataSync(
+//                    Image(ImagePtr((char*) out, TJDeleter()), size, count++));
+//        
+//    }
+//    ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
 }
 
 void WindowCaptureCallback::ContextData::multiPBO(
@@ -579,15 +587,15 @@ void WindowCaptureCallback::ContextData::multiPBO(
             height,
             pixelFormat_ == GL_BGRA ? TJPF_BGRA : TJPF_BGR,
             (unsigned char **) &c.ptr,
-            size,
+            &size,
             cs, //444=best quality,
                 //420=fast and still unnoticeable but MIGHT NOT WORK
                 //IN SOME BROWSERS
             quality,
-            TJXOP_VFLIP);    
+            TJXOP_VFLIP);
         ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
         context->SetServiceDataSync(
-                  Image(ImagePtr((char*) c.ptr, TJDeleter(c.size, mem), 
+                  Image(ImagePtr((char*) c.ptr, TJDeleter(c.size, mem)), 
                                  size, count++));
     }
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
