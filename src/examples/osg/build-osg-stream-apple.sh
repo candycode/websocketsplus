@@ -10,7 +10,7 @@ TJ_INCLUDES="/opt/libjpeg-turbo/include"; \
 TJ_LIB_DIR="/opt/libjpeg-turbo/lib"; \
 WS_INCLUDES="/usr/local/libwebsockets/include"; \
 WS_LIB_DIR="/usr/local/libwebsockets/lib"; \
-CC=g++; \
+CC=clang++; \
 SOURCE_PATH=/Users/uvaretto/projects/websocketsplus; \
 OUT_PATH=/Users/uvaretto/projects/websocketsplus/tmp-build; \
 $CC -std=c++11  -stdlib=libc++ $SOURCE_PATH/src/examples/osg/osg-stream.cpp \
