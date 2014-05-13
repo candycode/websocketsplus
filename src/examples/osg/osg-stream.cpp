@@ -128,19 +128,22 @@ public:
         return Allocate(Allocator::ComputeSize(args...));
     }
     Chunk Allocate(size_t sz) {
-        std::lock_guard< std::mutex > quard(mutex_);
+        //std::lock_guard< std::mutex > quard(mutex_);
+        if(mutex_.try_lock()) {
         Pool::iterator i = buffers_.upper_bound(Chunk(sz - 1));
-        ++getCount_;
+        //++getCount_;
         if(i == buffers_.end()) return Chunk(sz, Allocator::New(sz));
         else {
             Chunk c = *i;
             buffers_.erase(i);
             return c;
+        }} else {
+            return Chunk(sz, Allocator::New(sz));
         }
     }
     void Put(size_t sz, void* ptr) {
         std::lock_guard< std::mutex > quard(mutex_);
-        ++putCount_;
+        //++putCount_;
         buffers_.insert(Chunk(sz, ptr));
     }
     void Clear(size_t sz) {
