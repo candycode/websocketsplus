@@ -603,7 +603,7 @@ void WindowCaptureCallback::ContextData::multiPBO(
 }
 
 //------------------------------------------------------------------------------
-/// Image service: streams a sequence of images
+/// Image service: streams images
 class ImageService : public SessionService< wsp::Context< Image > > {
 
     using Context = wsp::Context< Image >;
@@ -797,8 +797,15 @@ int main(int argc, char** argv)
     arguments.getApplicationUsage()->setApplicationName(
                                                 arguments.getApplicationName());
     arguments.getApplicationUsage()->setCommandLineUsage(
-                      arguments.getApplicationName()+" [options] filename ...");
-
+                      arguments.getApplicationName()
+                      + " [--double-pbo | --triple-pbo (default: triple)]"
+                        " [--view-size width height (default: 1440 900)]"
+                        " filename ...");
+    osg::ApplicationUsage* usage = arguments.getApplicationUsage();
+    usage->addCommandLineOption("--double-pbo", "Use 2 PBOs");
+    usage->addCommandLineOption("--triple-pbo", "Use 3 PBos");
+    usage->addCommandLineOption("--view-size width height", 
+                                "Set max view size", "1440 900");
     osgViewer::Viewer viewer(arguments);
     v = &viewer;
     unsigned int helpType = 0;
@@ -856,7 +863,7 @@ int main(int argc, char** argv)
    
     GLenum readBuffer = GL_BACK;
     WindowCaptureCallback::Mode mode = WindowCaptureCallback::DOUBLE_PBO;
-
+    mode = WindowCaptureCallback::TRIPLE_PBO;
     while (arguments.read("--single-pbo")) 
         mode = WindowCaptureCallback::SINGLE_PBO;
     while (arguments.read("--double-pbo")) 
