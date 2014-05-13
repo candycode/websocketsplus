@@ -128,6 +128,7 @@ public:
         return Allocate(Allocator::ComputeSize(args...));
     }
     Chunk Allocate(size_t sz) {
+        std::lock_guard< std::mutex > quard(mutex_);
         Pool::iterator i = buffers_.upper_bound(Chunk(sz - 1));
         ++getCount_;
         if(i == buffers_.end()) return Chunk(sz, Allocator::New(sz));
