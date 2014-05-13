@@ -488,71 +488,73 @@ private:
 
 void WindowCaptureCallback::ContextData::singlePBO(
                                         osg::GLBufferObject::Extensions* ext) {  
-throw std::logic_error("Single PBO not implemented");
-//    int width = 0, height = 0;
-//    getSize(gc_, width, height);
-//    const int byteSize = width * height * (pixelFormat_ == GL_BGRA ? 4 : 3);   
-//    GLuint& pbo = pboBuffer_[0];
-//    if (width!=width_ || height_!=height) {
-//        width_ = width;
-//        height_ = height;
-//         if(pbo != 0)  { ext->glDeleteBuffers (1, &pbo); pbo = 0; }
-//         if (pbo==0) {
-//            ext->glGenBuffers(1, &pbo);
-//            ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
-//        }
-//        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
-//                          GL_STREAM_READ);
-//    }
-//   
-//    if(pbo==0) {
-//        ext->glGenBuffers(1, &pbo);
-//        ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
-//        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
-//                          GL_STREAM_READ);
-//    }
-//    else {
-//        ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
-//    }
-//
-//    glReadPixels(0, 0, width_, height_, pixelFormat_, type_, 0);
-//    GLubyte* src = (GLubyte*)ext->glMapBuffer(GL_PIXEL_PACK_BUFFER_ARB,
-//                                              GL_READ_ONLY_ARB);
-//    if(src) {
-//        static int count = 0;
-//        char* out = nullptr;
-//        unsigned long size = 0;
-//        tjCompress2(tj_,
-//            (unsigned char*) src,
-//            width,
-//            width * (pixelFormat_ == GL_BGRA ? tjPixelSize[TJPF_RGBA] 
-//                                             : tjPixelSize[TJPF_RGB]),
-//            height,
-//            pixelFormat_ == GL_BGRA ? TJPF_BGRA : TJPF_BGR,
-//            (unsigned char **) &out,
-//            &size,
-//            cs, //444=best quality,
-//                        //420=fast and still unnoticeable but MIGHT NOT WORK
-//                        //IN SOME BROWSERS
-//            quality,
-//            TJXOP_VFLIP );    
-//            ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
-//
-//            context->SetServiceDataSync(
-//                    Image(ImagePtr((char*) out, TJDeleter()), size, count++));
-//        
-//    }
-//    ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
+    int width = 0, height = 0;
+    getSize(gc_, width, height);
+    const int byteSize = width * height * (pixelFormat_ == GL_BGRA ? 4 : 3);   
+    GLuint& pbo = pboBuffer_[0];
+    if (width!=width_ || height_!=height) {
+        width_ = width;
+        height_ = height;
+         if(pbo != 0)  { ext->glDeleteBuffers (1, &pbo); pbo = 0; }
+         if (pbo==0) {
+            ext->glGenBuffers(1, &pbo);
+            ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+        }
+        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
+                          GL_STREAM_READ);
+    }
+   
+    if(pbo==0) {
+        ext->glGenBuffers(1, &pbo);
+        ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
+                          GL_STREAM_READ);
+    }
+    else {
+        ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+    }
+
+    glReadPixels(0, 0, width, height, pixelFormat_, type_, 0);
+    GLubyte* src = (GLubyte*)ext->glMapBuffer(GL_PIXEL_PACK_BUFFER_ARB,
+                                              GL_READ_ONLY_ARB);
+    if(src) {
+        static TJMemory mem;
+        static int count = 0;
+        unsigned long size = 0;
+        const Chunk c = mem.Get(width, height, cs);
+        char* out = (char*) c.ptr;
+        tjCompress2(tj_,
+            (unsigned char*) src,
+            width,
+            width * (pixelFormat_ == GL_BGRA ? tjPixelSize[TJPF_RGBA] 
+                                             : tjPixelSize[TJPF_RGB]),
+            height,
+            pixelFormat_ == GL_BGRA ? TJPF_BGRA : TJPF_BGR,
+            (unsigned char **) &out,
+            &size,
+            cs, //444=best quality,
+                //420=fast and still unnoticeable but MIGHT NOT WORK
+                //IN SOME BROWSERS
+            quality,
+            TJXOP_VFLIP );    
+            ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
+
+            context->SetServiceDataSync(
+                    Image(ImagePtr(out, TJDeleter(c.size, mem)), size, count++));
+        
+    }
+    ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
 }
 
 void WindowCaptureCallback::ContextData::multiPBO(
                                         osg::GLBufferObject::Extensions* ext) {
+    static int resizeSteps = 0;
     unsigned int nextPboIndex = (currentPboIndex_+1) % pboBuffer_.size();
     int width=0, height=0;
     getSize(gc_, width, height);
     if(width < 1 || height < 1) return;
     const int byteSize = width * height * (pixelFormat_ == GL_BGRA ? 4 : 3);   
-    if (width!=width_ || height_!=height) {
+    if (width != width_ || height_ != height) {
         width_ = width;
         height_ = height;
         for(auto& i: pboBuffer_) {
@@ -563,6 +565,7 @@ void WindowCaptureCallback::ContextData::multiPBO(
                               GL_STREAM_READ);
 
         }
+        resizeSteps = pboBuffer_.size();
     }
     GLuint& copy_pbo = pboBuffer_[currentPboIndex_];
     GLuint& read_pbo = pboBuffer_[nextPboIndex]; 
@@ -572,7 +575,8 @@ void WindowCaptureCallback::ContextData::multiPBO(
     static GLubyte* src = nullptr;
     src = (GLubyte*)ext->glMapBuffer(GL_PIXEL_PACK_BUFFER_ARB,
                                      GL_READ_ONLY_ARB);
-    if(src) {
+    resizeSteps = resizeSteps == 0 ? 0 : resizeSteps - 1;
+    if(src && !resizeSteps) {
         static TJMemory mem;
         static int count = 0;
         unsigned long size = 0;
@@ -649,7 +653,6 @@ public:
     }
     std::chrono::duration< double > 
     MinDelayBetweenWrites() const {
-        //use 0.0
         return std::chrono::duration< double >(0.0);
     }
 private:
@@ -699,7 +702,7 @@ std::string GetHomeDir() {
 #else
         = getenv("HOME");
 #endif 
-    return h;       
+    return h;
 }
 
 class HttpService {
@@ -978,7 +981,7 @@ int main(int argc, char** argv)
                 int& q = quality;
                 q = maxQuality_;
                 int& s = sendFrame_;
-                if(s > 0) --s;
+                //if(s > 0) --s;
             }
          }
     private:
