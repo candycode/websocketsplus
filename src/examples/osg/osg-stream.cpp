@@ -85,6 +85,8 @@
 using namespace std;
 
 
+bool END = false;
+
 template < typename T >
 class SyncQueue {
 public:    
@@ -128,22 +130,20 @@ public:
         return Allocate(Allocator::ComputeSize(args...));
     }
     Chunk Allocate(size_t sz) {
-        //std::lock_guard< std::mutex > quard(mutex_);
-        if(mutex_.try_lock()) {
+        std::lock_guard< std::mutex > quard(mutex_);
         Pool::iterator i = buffers_.upper_bound(Chunk(sz - 1));
-        //++getCount_;
-        if(i == buffers_.end()) return Chunk(sz, Allocator::New(sz));
-        else {
+        if(i == buffers_.end()) {
+            ++getCount_;
+            return Chunk(sz, Allocator::New(sz));
+        } else {
             Chunk c = *i;
             buffers_.erase(i);
             return c;
-        }} else {
-            return Chunk(sz, Allocator::New(sz));
         }
     }
     void Put(size_t sz, void* ptr) {
         std::lock_guard< std::mutex > quard(mutex_);
-        //++putCount_;
+        ++putCount_;
         buffers_.insert(Chunk(sz, ptr));
     }
     void Clear(size_t sz) {
@@ -189,7 +189,13 @@ struct TJDeleter {
     size_t size = 0;
     void operator()(char* p) const {
         if(!p) return;
-        mem_.get().Put(size, p);
+        //if END is true it means the per-session data is being
+        //destroyed by libwebsockets and we therefore need to
+        //explicilty free the memory here because the memory pool
+        //might be already dead at this point
+        //(TJDeleter <- ImagePtr <- Image, one ImagePtr copy per session)
+        if(END) tjFree((unsigned char*) p);
+        else mem_.get().Put(size, p);
     }
     TJDeleter(size_t s, TJMemory& m) : size(s), mem_(m) {}
 };
@@ -210,7 +216,6 @@ struct Image {
 };
 
 //------------------------------------------------------------------------------
-bool END = false;
 SyncQueue< vector< char > > msgQueue;
 osgViewer::Viewer* v = nullptr;
 int cs = TJSAMP_420;
