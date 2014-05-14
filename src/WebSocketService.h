@@ -658,6 +658,18 @@ int WebSocketService::WSCallback(
             if(p) c->InitProtocol(p->name);
         }
         break;
+        case LWS_CALLBACK_PROTOCOL_DESTROY: {
+            C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
+            if(!wsi) break;
+            const libwebsocket_protocols* p =  libwebsockets_get_protocol(wsi);
+            if(p) c->DestroyProtocol(p->name);
+        }
+        break;
+        case LWS_CALLBACK_WSI_DESTROY: {
+            C* c = reinterpret_cast< C* >(libwebsocket_context_user(context));
+            c->Destroy();
+        }
+        break;
         case LWS_CALLBACK_RECEIVE: {
             S* s = reinterpret_cast< S* >(user);
             const bool done = libwebsockets_remaining_packet_payload(wsi) == 0;

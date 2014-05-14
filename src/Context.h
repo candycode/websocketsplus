@@ -139,6 +139,10 @@ public:
     }
     /// Perform websocket protocol initialization
     void InitProtocol(const char*) {} 
+    /// Per-protocol cleanup, invoked from WS callback
+    void DestroyProtocol(const char* ) {}
+    /// One time destruction, invoked from WS callback
+    void Destroy() {}
     /// Per-session initialization: buffers and timers
     void InitSession(void* p, int n = 1, std::size_t s = 1, char d = '\0') {
         CreateBuffers(p, n, s, d);

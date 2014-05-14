@@ -13,7 +13,7 @@ WS_LIB_DIR="/usr/local/libwebsockets/lib"; \
 CC=clang++; \
 SOURCE_PATH=/Users/uvaretto/projects/websocketsplus; \
 OUT_PATH=/Users/uvaretto/projects/websocketsplus/tmp-build; \
-$CC -std=c++11  -stdlib=libc++ $SOURCE_PATH/src/examples/osg/osg-stream.cpp \
+$CC -std=c++11 -stdlib=libc++ $SOURCE_PATH/src/examples/osg/osg-stream.cpp \
 $SOURCE_PATH/src/mimetypes.cpp $SOURCE_PATH/src/http.cpp \
 $SOURCE_PATH/src/WebSocketService.cpp \
 -I $OSG_INCLUDES -I $TJ_INCLUDES -I $WS_INCLUDES \

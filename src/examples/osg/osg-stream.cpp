@@ -84,7 +84,6 @@
 
 using namespace std;
 
-
 bool END = false;
 
 template < typename T >
@@ -133,7 +132,7 @@ public:
         std::lock_guard< std::mutex > quard(mutex_);
         Pool::iterator i = buffers_.upper_bound(Chunk(sz - 1));
         if(i == buffers_.end()) {
-            ++getCount_;
+            ++allocCount_;
             return Chunk(sz, Allocator::New(sz));
         } else {
             Chunk c = *i;
@@ -143,7 +142,6 @@ public:
     }
     void Put(size_t sz, void* ptr) {
         std::lock_guard< std::mutex > quard(mutex_);
-        ++putCount_;
         buffers_.insert(Chunk(sz, ptr));
     }
     void Clear(size_t sz) {
@@ -157,13 +155,11 @@ public:
     ~MemoryPool() {
         Clear(0);
     }
-    size_t PutCount() const { return putCount_; }
-    size_t GetCount() const { return getCount_; }
+    size_t AllocationCount() const { return allocCount_; }
 private:
     Pool buffers_;
     std::mutex mutex_;
-    std::size_t putCount_ = 0;
-    std::size_t getCount_ = 0;
+    std::size_t allocCount_ = 0;
 };
 //------------------------------------------------------------------------------
 struct TJDelete {
@@ -191,9 +187,11 @@ struct TJDeleter {
         if(!p) return;
         //if END is true it means the per-session data is being
         //destroyed by libwebsockets and we therefore need to
-        //explicilty free the memory here because the memory pool
-        //might be already dead at this point
-        //(TJDeleter <- ImagePtr <- Image, one ImagePtr copy per session)
+        //explicilty free the memory;
+        //Note that on linux the buffer is correctly put back into the
+        //(static) memory pool when the ws context is destroyed and the 
+        //connection closed; on Mac OS I'm getting an exception without
+        // using this trick
         if(END) tjFree((unsigned char*) p);
         else mem_.get().Put(size, p);
     }
@@ -222,8 +220,6 @@ int cs = TJSAMP_420;
 int quality = 75;
 shared_ptr< wsp::Context< Image > > context(new wsp::Context< Image >);
 bool moving = false;
-//frames are sent to clients if and only if this variable's value is > 0
-int sendFrame = 2;
 //------------------------------------------------------------------------------
 struct Msg {
     Msg(vector< char >&& d) {
@@ -302,7 +298,6 @@ void keyevent(int k) {
         END = true;
         return;
     }
-    sendFrame = 3;
     v->getEventQueue()->keyPress((osgGA::GUIEventAdapter::KeySymbol) k);
    
 }
@@ -329,7 +324,6 @@ void wheelevent(const Msg& m) {
 
 
 void resizeevent(int w, int h) {
-    sendFrame = 10;
     v->getCamera()->getGraphicsContext()->resized(0, 0, w, h);      
     //the following does not resize the context but it is required to
     //make the manipulators work!
@@ -345,7 +339,6 @@ void loadfiles(const std::string& f) {
     osgUtil::Optimizer optimizer;
     optimizer.optimize(loadedModel.get());
     v->setSceneData(loadedModel.get());
-    sendFrame = 2;
 }
 
 void HandleMessage() {
@@ -437,7 +430,6 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
                 }
             }
             void read() {
-                if(!sendFrame) return;
                 osg::GLBufferObject::Extensions* ext =
                     osg::GLBufferObject::getExtensions(gc_->getState()
                         ->getContextID(), true);
@@ -499,18 +491,23 @@ void WindowCaptureCallback::ContextData::singlePBO(
                                         osg::GLBufferObject::Extensions* ext) {  
     int width = 0, height = 0;
     getSize(gc_, width, height);
+    const int prevByteSize = width_  
+                             * height_ 
+                             * (pixelFormat_ == GL_BGRA ? 4 : 3);
     const int byteSize = width * height * (pixelFormat_ == GL_BGRA ? 4 : 3);   
     GLuint& pbo = pboBuffer_[0];
-    if (width!=width_ || height_!=height) {
+    if(width != width_ || height_ != height) {
         width_ = width;
         height_ = height;
-         if(pbo != 0)  { ext->glDeleteBuffers (1, &pbo); pbo = 0; }
-         if (pbo==0) {
-            ext->glGenBuffers(1, &pbo);
-            ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+        if(prevByteSize < byteSize || pbo ==  0) { 
+            if(pbo != 0)  { ext->glDeleteBuffers (1, &pbo); pbo = 0; }
+            if(pbo==0) {
+                ext->glGenBuffers(1, &pbo);
+                ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+            }
+            ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
+                              GL_STREAM_READ);
         }
-        ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
-                          GL_STREAM_READ);
     }
    
     if(pbo==0) {
@@ -549,8 +546,8 @@ void WindowCaptureCallback::ContextData::singlePBO(
             ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
 
             context->SetServiceDataSync(
-                    Image(ImagePtr(out, TJDeleter(c.size, mem)), size, count++));
-        
+                    Image(ImagePtr(out, 
+                                    TJDeleter(c.size, mem)), size, count++));
     }
     ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
 }
@@ -572,7 +569,6 @@ void WindowCaptureCallback::ContextData::multiPBO(
             ext->glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, i);
             ext->glBufferData(GL_PIXEL_PACK_BUFFER_ARB, byteSize, 0,
                               GL_STREAM_READ);
-
         }
         resizeSteps = pboBuffer_.size();
     }
@@ -976,21 +972,17 @@ int main(int argc, char** argv)
 
     class CameraUpdateCallback : public osg::NodeCallback {
     public:
-        CameraUpdateCallback(int& q, int& s) : quality_(q), sendFrame_(s) {}
+        CameraUpdateCallback(int& q) : quality_(q) {}
          virtual void operator()(osg::Node* node, osg::NodeVisitor* nv) {
             traverse(node,nv);
             osg::Camera* c = (osg::Camera*) node;
             if(c->getViewMatrix() != d) {
                 int& q = quality;
                 q = minQuality_;
-                int& s = sendFrame_;
-                s = 2;
                 d = c->getViewMatrix();
             } else {
                 int& q = quality;
                 q = maxQuality_;
-                int& s = sendFrame_;
-                //if(s > 0) --s;
             }
          }
     private:
@@ -998,16 +990,13 @@ int main(int argc, char** argv)
          int minQuality_ = 10;
          int maxQuality_ = 80;
          reference_wrapper< int > quality_;
-         reference_wrapper< int > sendFrame_;
      };
  
 
     viewer.getCamera()->setUpdateCallback(
-                                    new CameraUpdateCallback(quality,
-                                                             sendFrame));
-
+                                    new CameraUpdateCallback(quality));
     using namespace chrono;
-    const microseconds T(int(1E6/60.0));
+    const microseconds T(int(1E6/62.0));
     while(!END) {
         steady_clock::time_point t = steady_clock::now(); 
         HandleMessage();
