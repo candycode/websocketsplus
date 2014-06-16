@@ -28,7 +28,7 @@
 #endif
 
 //------------------------------------------------------------------------------
-/// Per-session (between a socket open and close) echo service instance, this is
+/// Per-session (between a socket open and close) service instance, this is
 /// the class that handles incoming requests and sends back replies.
 /// SessionService instances get created when a WebSocket connection is
 /// established and deleted when the connection terminates.
