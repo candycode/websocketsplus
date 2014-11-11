@@ -15,6 +15,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+//clang++ -std=c++11 -I ../src -I /usr/local/libwebsockets/include  \
+//../src/examples/example.cpp ../src/WebSocketService.cpp \
+//-L /usr/local/libwebsockets/lib -lwebsockets
+
+//to use binary data compile with -DBINARY_DATA
+
 //Test driver for WebSocketService 
 //Interface requirements:
 //  * Context must provide reusable storage space to per-session service
@@ -62,7 +68,7 @@ int main(int, char**) {
     );
     //start event loop: one iteration every >= 50ms
     ws.StartLoop(50, //ms
-                 []{return true;} //termination condition (exit on false)
+                 []{return true;} //continuation condition (exit on false)
                                   //checked at each iteration, loops forever
                                   //in this case
                  );

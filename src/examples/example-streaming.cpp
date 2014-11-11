@@ -15,6 +15,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+//clang++ -std=c++11 -I ../src -I /usr/local/libwebsockets/include \ 
+//../src/examples/example-streaming.cpp ../src/WebSocketService.cpp 
+//-L /usr/local/libwebsockets/lib -lwebsockets
+
 //Test driver for WebSocketService streaming feature
 //Interface requirements:
 //  * Context must provide reusable storage space to per-session service
@@ -30,7 +34,6 @@
 #include "../WebSocketService.h"
 #include "../Context.h"
 #include "SessionService.h"
-
 //------------------------------------------------------------------------------
 /// Time service: streams current date and time
 class StreamService : public SessionService< wsp::Context<> > {
@@ -45,8 +48,9 @@ public:
         const std::time_t tt = system_clock::to_time_t(now);
         out_ << ctime(&tt);
         tmpstr_ = out_.str();
-        time_.resize(tmpstr_.size());
-        std::copy(tmpstr_.begin(), tmpstr_.end(), time_.begin());
+        time_.resize(tmpstr_.size() - 1);
+        std::copy(tmpstr_.begin(), tmpstr_.end() - 1, time_.begin());
+        time_.back() = '\0';
         df_= DataFrame(&time_[0], &(time_[0]) + time_.size(),
                        &time_[0], &(time_[0]) + time_.size(), true);
         return df_; 

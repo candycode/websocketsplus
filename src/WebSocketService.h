@@ -441,7 +441,9 @@ private:
         libwebsocket_protocols p;
         p.name = new char[entry.name.size() + 1];
         p.rx_buffer_size = entry.rxBufSize;
-        p.no_buffer_all_partial_tx = 1;//1; //handle partial send
+        
+        //removed!
+        //p.no_buffer_all_partial_tx = 1;//1; //handle partial send
         std::strcpy((char*) p.name, entry.name.c_str());        
         p.callback = &WebSocketService::WSCallback< ContextT,
                                       typename ArgT::ServiceType,
@@ -456,7 +458,8 @@ private:
         libwebsocket_protocols p;
         p.name = new char[entry.name.size() + 1];
         p.rx_buffer_size = entry.rxBufSize;
-        p.no_buffer_all_partial_tx = 1;//1; //handle partial send
+        //removed!        
+        //p.no_buffer_all_partial_tx = 1;//1; //handle partial send
         if(entry.name != "http-only")
             throw std::logic_error(
                 "Http service assinged to non 'http-only' protocol");
@@ -766,7 +769,8 @@ int WebSocketService::HttpCallback(
             if(libwebsockets_serve_http_file(context, wsi,
                                              s->FilePath().c_str(),
                                              s->FileMimeType().c_str(),
-                                             nullptr)) {
+                                             nullptr, //other headers
+                                             0)) {    //other headers length
                 //status = -1; //stop anyway: either error or file sent
                 break;
             }

@@ -15,7 +15,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-//g++ -std=c++11 ../src/WebSocketService.cpp ../src/http.cpp ../src/mimetypes.cpp ../src/examples/example-http.cpp -L /usr/local/libwebsockets/lib -I /usr/local/libwebsockets/include -lwebsockets -pthread -O3 -o http.exe
+//g++ -std=c++11 ../src/WebSocketService.cpp ../src/http.cpp ../src/mimetypes.cpp 
+//../src/examples/example-http.cpp -L /usr/local/libwebsockets/lib 
+//-I /usr/local/libwebsockets/include -lwebsockets -pthread -O3 -o http.exe
+
+//clang++ -std=c++11 -I ../src -I /usr/local/libwebsockets/include  
+//../src/examples/example-http.cpp ../src/WebSocketService.cpp 
+//-L /usr/local/libwebsockets/lib -lwebsockets ../src/http.cpp ../src/mimetypes.cpp
 
 //Http service example
 

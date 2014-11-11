@@ -24,11 +24,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
        <script type="text/javascript">
           
+          function ui8ArrayBufferToString(ab) {
+            return String.fromCharCode.apply(null, new Uint8Array(ab))
+            //OR (NEWER):
+            //var td = new TextDecoder("utf-8");
+            //return td.decode(new DataView(ab));
+          }
+
           $(function() {
               window.WebSocket = window.WebSocket || window.MozWebSocket;
               var out = $("[name='output']");
               var websocket = new WebSocket('ws://127.0.0.1:9001',
                                             'myprotocol-stream');
+              websocket.binaryType = "arraybuffer";
               websocket.onopen = function () {
                   $('h1').css('color', 'green');
               };
@@ -38,7 +46,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 console.log(e);
               };
               websocket.onmessage = function (e) {
-                 out.text(e.data);
+                 out.text(ui8ArrayBufferToString(e.data));
               };
            });
        </script>
