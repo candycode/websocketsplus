@@ -5,6 +5,8 @@
 //in OpenGL >= 3.3
 
 //g++ -std=c++11  ../src/examples/gl-stream-async.cpp -I /usr/local/glfw/include -DGL_GLEXT_PROTOTYPES -L /usr/local/glfw/lib -lglfw -I /usr/local/glm/include -lGL -lwebp -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread
+//clang++ -std=c++11  ../src/examples/gl-stream-async.cpp -DGL_GLEXT_PROTOTYPES -L /opt/local/lib -lglfw -I /opt/local/include -framework OpenGL -lwebp -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread -DGLM_FORCE_RADIANS
+
 
 //CHECK AFTER MAIN FOR ADDITIONAL INFO
 
@@ -170,7 +172,7 @@ void key_callback(GLFWwindow* window, int key,
 const char fragmentShaderSrc[] =
     "#version 330 core\n"
     "smooth in vec2 UV;\n"
-    "smooth out vec3 outColor;\n"
+    "out vec3 outColor;\n"
     "uniform sampler2D cltexture;\n"
     "uniform float frame;\n"
     "void main() {\n"
@@ -180,7 +182,7 @@ const char vertexShaderSrc[] =
     "#version 330 core\n"
     "layout(location = 0) in vec4 pos;\n"
     "layout(location = 1) in vec2 tex;\n"
-    "smooth out vec2 UV;\n"
+    "out vec2 UV;\n"
     "uniform mat4 MVP;\n"
     "void main() {\n"
     "  gl_Position = MVP * pos;\n"
@@ -241,7 +243,7 @@ private:
                 return;
             }
         }
-        img_ = ctx_->GetServiceDataSync();
+        ctx_->GetServiceDataSync(img_);
         df_.bufferBegin = img_.image.get();
         df_.bufferEnd = df_.bufferBegin + img_.size;
         df_.frameBegin = df_.bufferBegin;
@@ -358,6 +360,12 @@ int main(int argc, char** argv) {
     // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#ifdef __APPLE__    
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif        
 
     GLFWwindow* window = glfwCreateWindow(1024, 768,
                                           "image streaming", NULL, NULL);

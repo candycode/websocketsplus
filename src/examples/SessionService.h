@@ -91,8 +91,11 @@ public:
         return dataAvailable_;
     }
     /// Returns a reference to the data to send; called when libwebsockets needs
-    /// to send data to clients;
-    /// @param binary @true if data is in binary format, @false if it is text
+    /// to send data to clients.
+    /// Note that the start position for the send buffer is not updated in this
+    /// function but it is updated when UpdateOutputBuffer is called by the
+    /// WebSocketService instance.
+    /// @param requestedChunkLength size of requested data
     virtual const DataFrame& Get(int requestedChunkLength) const { 
         if(writeDataFrame_.frameBegin < writeDataFrame_.bufferEnd) {
             requestedChunkLength = std::min(requestedChunkLength,
@@ -121,7 +124,7 @@ public:
             prevReadCompleted_ = true;
         }
     }
-    /// Update write data frame 
+    /// Update write data frame, called by WebSocketService::Send method
     virtual void UpdateOutBuffer(int writtenBytes) {
         writeDataFrame_.frameBegin += writtenBytes;
     }

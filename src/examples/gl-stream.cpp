@@ -5,6 +5,7 @@
 //in OpenGL >= 3.3
 
 //g++ -std=c++11  ../src/examples/gl-stream.cpp -I /usr/local/glfw/include -DGL_GLEXT_PROTOTYPES -L /usr/local/glfw/lib -lglfw -I /usr/local/glm/include -lGL -lwebp -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3
+//clang++ -std=c++11  ../src/examples/gl-stream-async.cpp -DGL_GLEXT_PROTOTYPES -L /opt/local/lib -lglfw -I /opt/local/include -framework OpenGL -lwebp -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread -DGLM_FORCE_RADIANS
 
 #include <cstdlib>
 #include <iostream>
@@ -157,7 +158,7 @@ void key_callback(GLFWwindow* window, int key,
 const char fragmentShaderSrc[] =
     "#version 330 core\n"
     "smooth in vec2 UV;\n"
-    "smooth out vec3 outColor;\n"
+    "out vec3 outColor;\n"
     "uniform sampler2D cltexture;\n"
     "void main() {\n"
     "  outColor = texture(cltexture, UV).rrr;\n"
@@ -189,7 +190,7 @@ public:
     const DataFrame& Get(int requestedChunkLength) {
         if(df_.frameEnd < df_.bufferEnd) {
            //frameBegin *MUST* be updated in the UpdateOutBuffer method
-           //because in case the consumed data is less than requestedChunkLength
+           //in case the consumed data is less than requestedChunkLength
            // 
            //df_.frameBegin = df_.frameEnd;
            df_.frameEnd += min((ptrdiff_t) requestedChunkLength, 
@@ -270,9 +271,15 @@ int main(int argc, char** argv) {
     // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#ifdef __APPLE__    
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif    
 
     GLFWwindow* window = glfwCreateWindow(640, 480,
-                                          "OpenCL-GL interop", NULL, NULL);
+                                          "OpenGL streaming", NULL, NULL);
     if (!window) {
         std::cerr << "ERROR - glfwCreateWindow" << std::endl;
         glfwTerminate();
@@ -325,7 +332,7 @@ int main(int argc, char** argv) {
 
 
     // create texture 
-    std::vector< float > tc(SIZE * SIZE, 0.5f);
+    std::vector< float > tc(SIZE * SIZE, 1.0f);
     GLuint tex;
     glGenTextures(1, &tex);
 
