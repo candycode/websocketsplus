@@ -1,4 +1,4 @@
-//OpenGL scratch - reference implementation of OpenGL >= 3.3 rendering code  
+//OpenGL sync streaming: capture GL framebuffer and send through websockets
 //Author: Ugo Varetto
 
 //Requires GLFW and GLM, to deal with the missing support for matrix stack
@@ -12,6 +12,10 @@
 #include <vector>
 #include <memory>
 #include <fstream>
+
+#ifdef __APPLE__
+#include <OpenGL/gl3.h>
+#endif
 
 #include <GLFW/glfw3.h>
 
@@ -67,12 +71,12 @@ struct Image {
 };
 
 Image ReadImage(int width, int height,
-                   float quality = 75) {
+                float quality = 75) {
     std::vector< char > img( 3*width*height);
     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, &img[0]);
     uint8_t* out;
     const size_t size = 
-        WebPEncodeRGB((uint8_t*) &img[0], width, height, 3 * width, 75, &out);
+        WebPEncodeRGB((uint8_t*) &img[0], width, height, 3 * width, quality, &out);
     return Image(ImagePtr((char*) out, WebpDeleter()), size);
 }
 
@@ -248,7 +252,7 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
-
+#ifndef NO_STREAMING
     //==========================================================================
     using Context = wsp::Context< Image >;
     using WSS = wsp::WebSocketService;
@@ -264,7 +268,7 @@ int main(int argc, char** argv) {
                        WSS::Entry< ImageService,
                            WSS::ASYNC_REP, WSS::SEND_GREEDY >("image-stream"));
     //==========================================================================
-
+#endif
 
 
     //WARNING: THIS DOESN'T WORK
@@ -300,7 +304,7 @@ int main(int argc, char** argv) {
 
 
 //GEOMETRY
-    //geometry: textured quad; the texture color is computed by
+    //geometry: textured quad; the texture color is conputed by
     //OpenCL
     float quad[] = {-1.0f,  1.0f, 0.0f, 1.0f,
                     -1.0f, -1.0f, 0.0f, 1.0f,
@@ -314,25 +318,37 @@ int main(int argc, char** argv) {
                          1.0f, 0.0f,
                          1.0f, 0.0f,
                          1.0f, 1.0f,
-                         0.0f, 1.0f};                 
+                         0.0f, 1.0f};   
+    //OpenGL >= 3.3 core requires a vertex array object containing multiple attribute
+    //buffers                      
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao); 
+
+    //geometry buffer
     GLuint quadvbo;  
     glGenBuffers(1, &quadvbo);
     glBindBuffer(GL_ARRAY_BUFFER, quadvbo);
     glBufferData(GL_ARRAY_BUFFER, 6 * 4 * sizeof(float),
                  &quad[0], GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+    //texture coordinate buffer
     GLuint texbo;  
     glGenBuffers(1, &texbo);
+
     glBindBuffer(GL_ARRAY_BUFFER, texbo);
     glBufferData(GL_ARRAY_BUFFER, 12 * sizeof(real_t),
                  &texcoord[0], GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0); 
 
+    glBindVertexArray(0); 
 
     // create texture 
-    std::vector< float > tc(SIZE * SIZE, 1.0f);
+    std::vector< float > tc(SIZE * SIZE, 0.5f);
     GLuint tex;
     glGenTextures(1, &tex);
 
@@ -347,7 +363,7 @@ int main(int argc, char** argv) {
                  GL_RED,
                  GL_FLOAT,
                  &tc[0]);
-   
+  
     //optional
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -401,23 +417,26 @@ int main(int argc, char** argv) {
       
    
         //standard OpenGL core profile rendering
+        glUniformMatrix4fv(mvpID, 1, GL_FALSE, glm::value_ptr(MVP));
+  
+        //select geometry to render
+        glBindVertexArray(vao); 
         glEnableVertexAttribArray(0);
-
-        glBindBuffer(GL_ARRAY_BUFFER, quadvbo);
-
-        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
-
         glEnableVertexAttribArray(1);
-        glBindBuffer(GL_ARRAY_BUFFER, texbo);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
+        //draw
         glDrawArrays(GL_TRIANGLES, 0, 6);
+        //unbind
+        glBindVertexArray(0); 
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
        
+#ifndef NO_STREAMING        
         context.SetServiceData(ReadImage(width, height));
         imageStreamer.Next(); //send to client
-        //glfwSwapBuffers(window);
-        //glfwPollEvents();
+#else
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+#endif        
     }
 
 //CLEANUP
