@@ -26,6 +26,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   "http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
        <script type="text/javascript">         
           $(function() {
+              //CHANGE ACCORDINGLY
+              var MIMETYPE = "image/jpeg";
+              //var MIMETYPE = "image/webp";
               var websocket;
               window.WebSocket = window.WebSocket || window.MozWebSocket;
               var out = $("[name='output']");
@@ -36,7 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               var M  = $("[name='max']");
               var D  = $("[name='delta']");
               var img = document.querySelector( "#photo" );
-              var blob = new Blob( [], { type: "image/webp" } );
+              var blob = new Blob( [], { type: MIMETYPE } );
               var urlCreator = window.URL || window.webkitURL;
               var imageUrl;
               var b = document.querySelector( "body" );
@@ -80,6 +83,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               }
               var size;
               var dSize;
+
               websocket.onmessage = function (e) {
                 if(imageUrl)
                   urlCreator.revokeObjectURL(imageUrl);
@@ -97,9 +101,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                  D.text(dSize);
                  imageWidth.text(W);
                  imageHeight.text(H);
-                 //arrayBufferView = e.data;
-                 //blob = new Blob( [e.data], { type: "image/jpeg" } );
-                 blob = new Blob( [e.data], { type: "image/webp" } );
+                 blob = new Blob( [e.data], { type: MIMETYPE } );
                  imageUrl = urlCreator.createObjectURL( blob );
                  img.src = imageUrl;
               }

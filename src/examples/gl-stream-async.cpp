@@ -1,4 +1,4 @@
-//OpenGL scratch - reference implementation of OpenGL >= 3.3 rendering code  
+//OpenGL async streaming through websockets, uses webp format for storing framebuffer content 
 //Author: Ugo Varetto
 
 //Requires GLFW and GLM, to deal with the missing support for matrix stack

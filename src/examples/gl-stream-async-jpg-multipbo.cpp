@@ -1,11 +1,19 @@
-//OpenGL scratch - reference implementation of OpenGL >= 3.3 rendering code  
-//Author: Ugo Varetto
+//OpenGL async streaming through websockets, uses jpeg format for storing framebuffer content 
+//pixels are stored into multiple PBOs then read through map calls
 
 //Requires GLFW and GLM, to deal with the missing support for matrix stack
 //in OpenGL >= 3.3
 
 //g++ -std=c++11  ../src/examples/gl-stream-async-jpg.cpp -I /usr/local/glfw/include -DGL_GLEXT_PROTOTYPES -L /usr/local/glfw/lib -lglfw -I /usr/local/glm/include -lGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib64  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread
 //NOTE: turbo JPEG is > one order of magnitude faster than webp
+
+
+//clang++ -std=c++11  ../src/examples/gl-stream-async-jpg-multipbo.cpp 
+//-DGL_GLEXT_PROTOTYPES -L /opt/local/lib -lglfw -I /opt/local/include 
+//-framework OpenGL -lturbojpeg -I /usr/local/libwebsockets/include 
+//-L /usr/local/libwebsockets/lib  -I /opt/libjpeg-turbo/include 
+//-L /opt/libjpeg-turbo/lib -lwebsockets -O3 -pthread 
+//-o glstream-async-jpeg-multipbo -DGLM_FORCE_RADIANS
 
 //CHECK AFTER MAIN FOR ADDITIONAL INFO
 
@@ -19,6 +27,10 @@
 #include <memory>
 #include <chrono>
 #include <map>
+
+#ifdef __APPLE__
+#include <OpenGL/gl3.h>
+#endif
 
 #include <GLFW/glfw3.h>
 
@@ -87,15 +99,18 @@ Image ReadImage(tjhandle tj, int width, int height,
     index = (index + 1) % 2;
     nextIndex = (index + 1) % 2;    
 
+    if(count == 0) { //first time, init both pbos
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[0]);
+        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, 0);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[1]);
+        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, 0);
+    }
+    //cycle through PBOs
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[index]);
     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, 0);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[nextIndex]);
     char* glout = (char* ) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-    if(!glout) {
-       glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-       glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);    
-       return Image();
-    }
+   
     
 #ifdef TIME_READPIXEL    
     const milliseconds E =
@@ -113,8 +128,8 @@ Image ReadImage(tjhandle tj, int width, int height,
         (unsigned char **) &out,
         &size,
         cs, //444=best quality,
-                    //420=fast and still unnoticeable but MIGHT NOT WORK
-                    //IN SOME BROWSERS
+            //420=fast and still unnoticeable but MIGHT NOT WORK
+            //IN SOME BROWSERS
         quality,
         0); 
     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
@@ -196,11 +211,11 @@ const char fragmentShaderSrc[] =
     "#version 330 core\n"
     "smooth in vec2 UV;\n"
     "smooth in vec4 p;\n"
-    "smooth out vec3 outColor;\n"
+    "out vec3 outColor;\n"
     "uniform sampler2D cltexture;\n"
     "uniform float frame;\n"
     "void main() {\n"
-    "  outColor = frame * 0.5 *(p + vec4(1)).rgb;\n"
+    "  outColor = frame * 0.5 * (p + vec4(1)).rgb;\n"
     "}";
 const char vertexShaderSrc[] =
     "#version 330 core\n"
@@ -260,16 +275,18 @@ public:
     }
 private:
     void InitDataFrame() const {
+        //check if id == current id, if it is do not send
+        //note: not using sync access!
         if(ctx_->GetServiceData().id == img_.id) {
-            if(dontSendIfEqual_) {
-                //do not ever try to delete the memory in the smart pointer:
-                //it is allocated in the main thread and deallocated when
-                //the smart pointer counter reaches zero
-                img_.size = 0;
-                return;
-            }
+             if(dontSendIfEqual_) {
+                 //do not ever try to delete the memory in the smart pointer:
+                 //it is allocated in the main thread and deallocated when
+                 //the smart pointer counter reaches zero
+                 img_.size = 0;
+                 return;
+             }
         }
-        img_ = ctx_->GetServiceDataSync();
+        ctx_->GetServiceDataSync(img_);
         df_.bufferBegin = img_.image.get();
         df_.bufferEnd = df_.bufferBegin + img_.size;
         df_.frameBegin = df_.bufferBegin;
@@ -288,16 +305,17 @@ private:
 using ImageContext = wsp::Context< Image >;
 
 struct UserData {
+     GLuint vao;
      GLuint quadvbo;
      GLuint texbo;
      GLuint mvpID;
      GLuint frameID;
      shared_ptr< ImageContext > context;
      int frame;
-     UserData(GLuint q, GLuint t, GLuint m, GLuint f,
+     UserData(GLuint v, GLuint q, GLuint t, GLuint m, GLuint f,
               shared_ptr< ImageContext > c,
               int fr)
-     : quadvbo(q), texbo(t), mvpID(m), frameID(f), context(c), frame(fr) {}
+     : vao(v), quadvbo(q), texbo(t), mvpID(m), frameID(f), context(c), frame(fr) {}
 };
 
 void Draw(GLFWwindow* window, UserData& d, int width, int height) {
@@ -311,28 +329,24 @@ void Draw(GLFWwindow* window, UserData& d, int width, int height) {
                                            -1.0f,  1.0f,
                                             1.0f,  -1.0f);
     const glm::mat4 modelView = glm::mat4(1.0f);
-    const glm::mat4 MVP       = orthoProj * modelView;
+    const glm::mat4 MVP        = orthoProj * modelView;
     glViewport(0, 0, width, height);
 
     glUniformMatrix4fv(d.mvpID, 1, GL_FALSE, glm::value_ptr(MVP));
   
 
     //standard OpenGL core profile rendering
+    //select geometry to render
+    glBindVertexArray(d.vao); 
     glEnableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, d.quadvbo);
-
-    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
-
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, d.texbo);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
     float f = (d.frame % 101) / 100.0f;
     if(f < 0.f) f = 1.0f + f;
-    glUniform1f(d.frameID, f);  
+    glUniform1f(d.frameID, f);
+   
 }
 
 //------------------------------------------------------------------------------
@@ -340,7 +354,7 @@ int main(int argc, char** argv) {
 //USER INPUT
     if(argc < 3) {
       std::cout << "usage: " << argv[0]
-                << " <size> <quality>"
+                << " <size> <quality> [chrominance = 444 | 440 | 422 | 420]"
                 << std::endl; 
       exit(EXIT_FAILURE);          
     }
@@ -350,7 +364,8 @@ int main(int argc, char** argv) {
                              {"420", TJSAMP_420}};
     const int SIZE = stoi(argv[1]);
     const int QUALITY = stoi(argv[2]);
-    const int CHROMINANCE_SAMPLING = argc < 4 ? cs[argv[3]] : TJSAMP_444;
+    const int CHROMINANCE_SAMPLING = argc >= 4 ? cs[argv[3]] : TJSAMP_444;
+
 //GRAPHICS SETUP        
     glfwSetErrorCallback(error_callback);
 
@@ -391,6 +406,12 @@ int main(int argc, char** argv) {
     // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#ifdef __APPLE__    
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif        
 
     GLFWwindow* window = glfwCreateWindow((16 * SIZE) / 9, SIZE,
                                           "image streaming", NULL, NULL);
@@ -411,8 +432,7 @@ int main(int argc, char** argv) {
     std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
 
 //GEOMETRY
-    //geometry: textured quad; the texture color is computed by
-    //OpenCL
+     //geometry: textured quad
     float quad[] = {-1.0f,  1.0f, 0.0f, 1.0f,
                     -1.0f, -1.0f, 0.0f, 1.0f,
                      1.0f, -1.0f, 0.0f, 1.0f,
@@ -425,21 +445,35 @@ int main(int argc, char** argv) {
                          1.0f, 0.0f,
                          1.0f, 0.0f,
                          1.0f, 1.0f,
-                         0.0f, 1.0f};                 
+                         0.0f, 1.0f};   
+    //OpenGL >= 3.3 core requires a vertex array object containing multiple attribute
+    //buffers                      
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao); 
+
+    //geometry buffer
     GLuint quadvbo;  
     glGenBuffers(1, &quadvbo);
     glBindBuffer(GL_ARRAY_BUFFER, quadvbo);
     glBufferData(GL_ARRAY_BUFFER, 6 * 4 * sizeof(float),
                  &quad[0], GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+    //texture coordinate buffer
     GLuint texbo;  
     glGenBuffers(1, &texbo);
+
     glBindBuffer(GL_ARRAY_BUFFER, texbo);
     glBufferData(GL_ARRAY_BUFFER, 12 * sizeof(real_t),
                  &texcoord[0], GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0); 
+
+    glBindVertexArray(0); 
+
 
 
     // create texture 
@@ -501,7 +535,7 @@ int main(int argc, char** argv) {
 
 //RENDER LOOP    
     //rendering & simulation loop
-    UserData data(quadvbo, texbo, mvpID, frameID, context, 0);
+    UserData data(vao, quadvbo, texbo, mvpID, frameID, context, 0);
     glfwSetWindowUserPointer(window, &data); 
     int width = 0;
     int height = 0;

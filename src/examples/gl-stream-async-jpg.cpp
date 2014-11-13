@@ -1,10 +1,24 @@
-//OpenGL scratch - reference implementation of OpenGL >= 3.3 rendering code  
+//OpenGL async streaming through websockets, uses jpeg format for storing framebuffer content 
 //Author: Ugo Varetto
 
 //Requires GLFW and GLM, to deal with the missing support for matrix stack
 //in OpenGL >= 3.3
 
-//g++ -std=c++11  ../src/examples/gl-stream-async-jpg.cpp -I /usr/local/glfw/include -DGL_GLEXT_PROTOTYPES -L /usr/local/glfw/lib -lglfw -I /usr/local/glm/include -lGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib64  -lturbojpeg -I /usr/local/libwebsockets/include -L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread
+//g++ -std=c++11  ../src/examples/gl-stream-async-jpg.cpp \
+//-I /usr/local/glfw/include -DGL_GLEXT_PROTOTYPES \
+//-L /usr/local/glfw/lib -lglfw -I /usr/local/glm/include \
+//-lGL -I /opt/libjpeg-turbo/include -L /opt/libjpeg-turbo/lib64  \
+//-lturbojpeg -I /usr/local/libwebsockets/include \
+//-L /usr/local/libwebsockets/lib -lwebsockets -O3 -pthread
+
+//clang++ -std=c++11  ../src/examples/gl-stream-async-jpg.cpp 
+//-DGL_GLEXT_PROTOTYPES -L /opt/local/lib -lglfw -I /opt/local/include 
+//-framework OpenGL -lturbojpeg -I /usr/local/libwebsockets/include 
+//-L /usr/local/libwebsockets/lib  -I /opt/libjpeg-turbo/include 
+//-L /opt/libjpeg-turbo/lib -lwebsockets -O3 -pthread 
+//-o glstream-async-jpeg -DGLM_FORCE_RADIANS
+
+
 //NOTE: turbo JPEG is > one order of magnitude faster than webp
 
 //CHECK AFTER MAIN FOR ADDITIONAL INFO
@@ -20,6 +34,10 @@
 #include <memory>
 #include <chrono>
 #include <thread>
+
+#ifdef __APPLE__
+#include <OpenGL/gl3.h>
+#endif
 
 #include <GLFW/glfw3.h>
 
@@ -178,7 +196,7 @@ void key_callback(GLFWwindow* window, int key,
 const char fragmentShaderSrc[] =
     "#version 330 core\n"
     "smooth in vec2 UV;\n"
-    "smooth out vec3 outColor;\n"
+    "out vec3 outColor;\n"
     "uniform sampler2D cltexture;\n"
     "uniform float frame;\n"
     "void main() {\n"
@@ -249,7 +267,7 @@ private:
                 return;
             }
         }
-        img_ = ctx_->GetServiceDataSync();
+        ctx_->GetServiceDataSync(img_);
         df_.bufferBegin = img_.image.get();
         df_.bufferEnd = df_.bufferBegin + img_.size;
         df_.frameBegin = df_.bufferBegin;
@@ -268,16 +286,17 @@ private:
 using ImageContext = wsp::Context< Image >;
 
 struct UserData {
+     GLuint vao;
      GLuint quadvbo;
      GLuint texbo;
      GLuint mvpID;
      GLuint frameID;
      shared_ptr< ImageContext > context;
      int frame;
-     UserData(GLuint q, GLuint t, GLuint m, GLuint f,
+     UserData(GLuint v, GLuint q, GLuint t, GLuint m, GLuint f,
               shared_ptr< ImageContext > c,
               int fr)
-     : quadvbo(q), texbo(t), mvpID(m), frameID(f), context(c), frame(fr) {}
+     : vao(v), quadvbo(q), texbo(t), mvpID(m), frameID(f), context(c), frame(fr) {}
 };
 
 void Draw(GLFWwindow* window, UserData& d, int width, int height) {
@@ -298,15 +317,10 @@ void Draw(GLFWwindow* window, UserData& d, int width, int height) {
   
 
     //standard OpenGL core profile rendering
+    //select geometry to render
+    glBindVertexArray(d.vao); 
     glEnableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, d.quadvbo);
-
-    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
-
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, d.texbo);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
@@ -366,6 +380,12 @@ int main(int argc, char** argv) {
     // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#ifdef __APPLE__    
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif        
 
     GLFWwindow* window = glfwCreateWindow(1024, 768,
                                           "image streaming", NULL, NULL);
@@ -386,8 +406,7 @@ int main(int argc, char** argv) {
     std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
 
 //GEOMETRY
-    //geometry: textured quad; the texture color is computed by
-    //OpenCL
+    //geometry: textured quad
     float quad[] = {-1.0f,  1.0f, 0.0f, 1.0f,
                     -1.0f, -1.0f, 0.0f, 1.0f,
                      1.0f, -1.0f, 0.0f, 1.0f,
@@ -400,21 +419,34 @@ int main(int argc, char** argv) {
                          1.0f, 0.0f,
                          1.0f, 0.0f,
                          1.0f, 1.0f,
-                         0.0f, 1.0f};                 
+                         0.0f, 1.0f};   
+    //OpenGL >= 3.3 core requires a vertex array object containing multiple attribute
+    //buffers                      
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao); 
+
+    //geometry buffer
     GLuint quadvbo;  
     glGenBuffers(1, &quadvbo);
     glBindBuffer(GL_ARRAY_BUFFER, quadvbo);
     glBufferData(GL_ARRAY_BUFFER, 6 * 4 * sizeof(float),
                  &quad[0], GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+    //texture coordinate buffer
     GLuint texbo;  
     glGenBuffers(1, &texbo);
+
     glBindBuffer(GL_ARRAY_BUFFER, texbo);
     glBufferData(GL_ARRAY_BUFFER, 12 * sizeof(real_t),
                  &texcoord[0], GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0); 
+
+    glBindVertexArray(0); 
 
 
     // create texture 
@@ -469,7 +501,7 @@ int main(int argc, char** argv) {
 
 //RENDER LOOP    
     //rendering & simulation loop
-    UserData data(quadvbo, texbo, mvpID, frameID, context, 0);
+    UserData data(vao, quadvbo, texbo, mvpID, frameID, context, 0);
     glfwSetWindowUserPointer(window, &data); 
     int width = 0;
     int height = 0;
