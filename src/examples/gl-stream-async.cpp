@@ -22,6 +22,10 @@
 #include <chrono>
 #include <thread>
 
+#ifdef __APPLE__
+#include <OpenGL/gl3.h>
+#endif
+
 #include <GLFW/glfw3.h>
 
 // Include GLM
@@ -262,16 +266,17 @@ private:
 using ImageContext = wsp::Context< Image >;
 
 struct UserData {
+     GLuint vao;
      GLuint quadvbo;
      GLuint texbo;
      GLuint mvpID;
      GLuint frameID;
      shared_ptr< ImageContext > context;
      int frame;
-     UserData(GLuint q, GLuint t, GLuint m, GLuint f,
+     UserData(GLuint v, GLuint q, GLuint t, GLuint m, GLuint f,
               shared_ptr< ImageContext > c,
               int fr)
-     : quadvbo(q), texbo(t), mvpID(m), frameID(f), context(c), frame(fr) {}
+     : vao(v), quadvbo(q), texbo(t), mvpID(m), frameID(f), context(c), frame(fr) {}
 };
 
 void Draw(GLFWwindow* window, UserData& d, int width, int height) {
@@ -292,15 +297,10 @@ void Draw(GLFWwindow* window, UserData& d, int width, int height) {
   
 
     //standard OpenGL core profile rendering
+    //select geometry to render
+    glBindVertexArray(d.vao); 
     glEnableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, d.quadvbo);
-
-    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
-
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, d.texbo);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
@@ -386,8 +386,6 @@ int main(int argc, char** argv) {
     std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
 
 //GEOMETRY
-    //geometry: textured quad; the texture color is computed by
-    //OpenCL
     float quad[] = {-1.0f,  1.0f, 0.0f, 1.0f,
                     -1.0f, -1.0f, 0.0f, 1.0f,
                      1.0f, -1.0f, 0.0f, 1.0f,
@@ -400,22 +398,34 @@ int main(int argc, char** argv) {
                          1.0f, 0.0f,
                          1.0f, 0.0f,
                          1.0f, 1.0f,
-                         0.0f, 1.0f};                 
+                         0.0f, 1.0f};   
+    //OpenGL >= 3.3 core requires a vertex array object containing multiple attribute
+    //buffers                      
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao); 
+
+    //geometry buffer
     GLuint quadvbo;  
     glGenBuffers(1, &quadvbo);
     glBindBuffer(GL_ARRAY_BUFFER, quadvbo);
     glBufferData(GL_ARRAY_BUFFER, 6 * 4 * sizeof(float),
                  &quad[0], GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+    //texture coordinate buffer
     GLuint texbo;  
     glGenBuffers(1, &texbo);
+
     glBindBuffer(GL_ARRAY_BUFFER, texbo);
     glBufferData(GL_ARRAY_BUFFER, 12 * sizeof(real_t),
                  &texcoord[0], GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0); 
 
+    glBindVertexArray(0); 
 
     // create texture 
     std::vector< float > tc(SIZE * SIZE, 0.5f);
@@ -433,7 +443,7 @@ int main(int argc, char** argv) {
                  GL_RED,
                  GL_FLOAT,
                  &tc[0]);
-   
+  
     //optional
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -442,7 +452,6 @@ int main(int argc, char** argv) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); 
 
     glBindTexture(GL_TEXTURE_2D, 0);
-
 
 //OPENGL RENDERING SHADERS
    
@@ -469,7 +478,7 @@ int main(int argc, char** argv) {
 
 //RENDER LOOP    
     //rendering & simulation loop
-    UserData data(quadvbo, texbo, mvpID, frameID, context, 0);
+    UserData data(vao, quadvbo, texbo, mvpID, frameID, context, 0);
     glfwSetWindowUserPointer(window, &data); 
     int width = 0;
     int height = 0;
