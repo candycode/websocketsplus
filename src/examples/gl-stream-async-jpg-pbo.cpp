@@ -489,12 +489,6 @@ int main(int argc, char** argv) {
 
     GLint frameID = glGetUniformLocation(glprogram, "frame");
 
-    
-    // //only need texture unit 0
-    // glActiveTexture(GL_TEXTURE0);
-    // glBindTexture(GL_TEXTURE_2D, tex);
-    // glUniform1i(textureID, 0);
-
     //=========================================================================
     GLuint pboId;
     glGenBuffers(1, &pboId);
@@ -503,7 +497,7 @@ int main(int argc, char** argv) {
 
 
 
-    //beckground color        
+    //background color        
     glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
 
 //RENDER LOOP    

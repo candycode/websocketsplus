@@ -8,12 +8,12 @@
 //NOTE: turbo JPEG is > one order of magnitude faster than webp
 
 
-//clang++ -std=c++11  ../src/examples/gl-stream-async-jpg-multipbo.cpp 
-//-DGL_GLEXT_PROTOTYPES -L /opt/local/lib -lglfw -I /opt/local/include 
-//-framework OpenGL -lturbojpeg -I /usr/local/libwebsockets/include 
-//-L /usr/local/libwebsockets/lib  -I /opt/libjpeg-turbo/include 
-//-L /opt/libjpeg-turbo/lib -lwebsockets -O3 -pthread 
-//-o glstream-async-jpeg-multipbo -DGLM_FORCE_RADIANS
+// clang++ -std=c++11  ../src/examples/gl-stream-async-jpg-multipbo.cpp 
+// -DGL_GLEXT_PROTOTYPES -L /opt/local/lib -lglfw -I /opt/local/include 
+// -framework OpenGL -lturbojpeg -I /usr/local/libwebsockets/include 
+// -L /usr/local/libwebsockets/lib  -I /opt/libjpeg-turbo/include 
+// -L /opt/libjpeg-turbo/lib -lwebsockets -O3 -pthread 
+// -o glstream-async-jpeg-multipbo -DGLM_FORCE_RADIANS
 
 //CHECK AFTER MAIN FOR ADDITIONAL INFO
 
@@ -91,6 +91,13 @@ Image ReadImage(tjhandle tj, int width, int height,
     static int count = 0;
     static int index = 0;
     static int nextIndex = 0;
+    static int prevWidth = 0;
+    static int prevHeight = 0;
+    if(prevWidth != width || prevHeight != height) {
+        prevWidth = width;
+        prevHeight = height;
+        return Image();
+    }
     glReadBuffer(GL_BACK);
 #ifdef TIME_READPIXEL    
     using namespace std::chrono;
@@ -98,20 +105,22 @@ Image ReadImage(tjhandle tj, int width, int height,
 #endif
     index = (index + 1) % 2;
     nextIndex = (index + 1) % 2;    
-
-    if(count == 0) { //first time, init both pbos
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[0]);
-        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, 0);
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[1]);
-        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, 0);
-    }
-    //cycle through PBOs
+    // if(count == 0) { //first time, init both pbos
+    //     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[0]);
+    //     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, 0);
+    //     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[1]);
+    //     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, 0);
+    // } else {
+        //cycle through PBOs
+        //copy puxels into pbo...
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[index]);
     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, 0);
+        //...while reading previous copy from other pbo
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo[nextIndex]);
+    //}
     char* glout = (char* ) glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+    assert(glout);
    
-    
 #ifdef TIME_READPIXEL    
     const milliseconds E =
                         duration_cast< milliseconds >(steady_clock::now() - t);
@@ -122,7 +131,7 @@ Image ReadImage(tjhandle tj, int width, int height,
     tjCompress2(tj,
         (unsigned char*) glout,
         width,
-        tjPixelSize[TJPF_RGB] * width,
+        3 * width,
         height,
         TJPF_RGB,
         (unsigned char **) &out,
@@ -212,7 +221,6 @@ const char fragmentShaderSrc[] =
     "smooth in vec2 UV;\n"
     "smooth in vec4 p;\n"
     "out vec3 outColor;\n"
-    "uniform sampler2D cltexture;\n"
     "uniform float frame;\n"
     "void main() {\n"
     "  outColor = frame * 0.5 * (p + vec4(1)).rgb;\n"
@@ -220,13 +228,10 @@ const char fragmentShaderSrc[] =
 const char vertexShaderSrc[] =
     "#version 330 core\n"
     "layout(location = 0) in vec4 pos;\n"
-    "layout(location = 1) in vec2 tex;\n"
-    "smooth out vec2 UV;\n"
     "smooth out vec4 p;\n"
     "uniform mat4 MVP;\n"
     "void main() {\n"
     "  gl_Position = MVP * pos;\n"
-    "  UV = tex;\n"
     "  p = gl_Position;\n"
     "}";   
 
@@ -307,15 +312,14 @@ using ImageContext = wsp::Context< Image >;
 struct UserData {
      GLuint vao;
      GLuint quadvbo;
-     GLuint texbo;
      GLuint mvpID;
      GLuint frameID;
      shared_ptr< ImageContext > context;
      int frame;
-     UserData(GLuint v, GLuint q, GLuint t, GLuint m, GLuint f,
+     UserData(GLuint v, GLuint q, GLuint m, GLuint f,
               shared_ptr< ImageContext > c,
               int fr)
-     : vao(v), quadvbo(q), texbo(t), mvpID(m), frameID(f), context(c), frame(fr) {}
+     : vao(v), quadvbo(q), mvpID(m), frameID(f), context(c), frame(fr) {}
 };
 
 void Draw(GLFWwindow* window, UserData& d, int width, int height) {
@@ -339,10 +343,9 @@ void Draw(GLFWwindow* window, UserData& d, int width, int height) {
     //select geometry to render
     glBindVertexArray(d.vao); 
     glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
+    glBindVertexArray(0);
     float f = (d.frame % 101) / 100.0f;
     if(f < 0.f) f = 1.0f + f;
     glUniform1f(d.frameID, f);
@@ -413,7 +416,9 @@ int main(int argc, char** argv) {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif        
 
-    GLFWwindow* window = glfwCreateWindow((16 * SIZE) / 9, SIZE,
+    //GLFWwindow* window = glfwCreateWindow((16 * SIZE) / 9, SIZE,
+    //                                      "image streaming", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(640, 480,
                                           "image streaming", NULL, NULL);
     if (!window) {
         std::cerr << "ERROR - glfwCreateWindow" << std::endl;
@@ -462,46 +467,6 @@ int main(int argc, char** argv) {
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    //texture coordinate buffer
-    GLuint texbo;  
-    glGenBuffers(1, &texbo);
-
-    glBindBuffer(GL_ARRAY_BUFFER, texbo);
-    glBufferData(GL_ARRAY_BUFFER, 12 * sizeof(real_t),
-                 &texcoord[0], GL_STATIC_DRAW);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0); 
-
-    glBindVertexArray(0); 
-
-
-
-    // create texture 
-    std::vector< float > tc(SIZE * SIZE, 0.5f);
-    GLuint tex;
-    glGenTextures(1, &tex);
-
-    glBindTexture(GL_TEXTURE_2D, tex);
-   
-    glTexImage2D(GL_TEXTURE_2D,
-                 0,
-                 GL_RED,
-                 SIZE,
-                 SIZE,
-                 0,
-                 GL_RED,
-                 GL_FLOAT,
-                 &tc[0]);
-   
-    //optional
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    //required
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); 
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-
 
 //OPENGL RENDERING SHADERS
    
@@ -513,15 +478,7 @@ int main(int argc, char** argv) {
     //extract ids of shader variables
     GLint mvpID = glGetUniformLocation(glprogram, "MVP");
 
-    GLint textureID = glGetUniformLocation(glprogram, "cltexture");
-
     GLint frameID = glGetUniformLocation(glprogram, "frame");
-
-    
-    // //only need texture unit 0
-    // glActiveTexture(GL_TEXTURE0);
-    // glBindTexture(GL_TEXTURE_2D, tex);
-    // glUniform1i(textureID, 0);
 
     //=========================================================================
     GLuint pboId[2];
@@ -531,32 +488,37 @@ int main(int argc, char** argv) {
 
 
     //background color        
-    glClearColor(0.0f, 0.0f, 0.4f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
 
 //RENDER LOOP    
     //rendering & simulation loop
-    UserData data(vao, quadvbo, texbo, mvpID, frameID, context, 0);
+    UserData data(vao, quadvbo, mvpID, frameID, context, 0);
     glfwSetWindowUserPointer(window, &data); 
     int width = 0;
     int height = 0;
+    int size = 0;
     using namespace std::chrono;
     const milliseconds T(20);
     while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
         steady_clock::time_point t = steady_clock::now(); 
         glfwGetFramebufferSize(window, &width, &height);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, pboId[0]);
-        glBufferData(GL_PIXEL_PACK_BUFFER, width * height * 3, 0,
-                     GL_DYNAMIC_READ);
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, pboId[1]);
-        glBufferData(GL_PIXEL_PACK_BUFFER, width * height * 3, 0,
-                     GL_DYNAMIC_READ);
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);      
+        if(width * height > size) {
+            glBufferData(GL_PIXEL_PACK_BUFFER, width * height * 3, 0,
+                         GL_DYNAMIC_READ);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pboId[1]);
+            glBufferData(GL_PIXEL_PACK_BUFFER, width * height * 3, 0,
+                          GL_DYNAMIC_READ);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        }      
         Draw(window, data, width, height);
-        //glfwSwapBuffers(window);
+        glfwSwapBuffers(window);
+        if(width * height == size || !size)
         data.context->SetServiceDataSync(ReadImage(tj, width, height, pboId,
                                                    QUALITY,
                                                    CHROMINANCE_SAMPLING));
+       
+        size = width * height;
         ++data.frame;
         const milliseconds E =
                         duration_cast< milliseconds >(steady_clock::now() - t);
@@ -565,16 +527,14 @@ int main(int argc, char** argv) {
 #endif                                
         std::this_thread::sleep_for(
             max(duration_values< milliseconds >::zero(), T - E));
-        
+        glfwPollEvents();
     }
     
 //CLEANUP
     glDeleteBuffers(1, &quadvbo);
-    glDeleteBuffers(1, &texbo);
-    glDeleteTextures(1, &tex);
     glDeleteBuffers(2, pboId);
     glfwDestroyWindow(window);
-
+   
     glfwTerminate();
     is.wait();
     tjDestroy(tj);
