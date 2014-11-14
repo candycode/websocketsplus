@@ -21,6 +21,11 @@
 //    instances to avoid reallocating memory at each request-reply
 //  * Service is a per-session instance which handles requests and replies
 //    through the Put and Get methods
+
+//clang++ -std=c++11 -I ../src -I /usr/local/libwebsockets/include  \
+//../src/examples/example-send-image.cpp ../src/WebSocketService.cpp \
+//-L /usr/local/libwebsockets/lib -lwebsockets
+
 #include <iostream>
 #include <vector>
 #include <string>

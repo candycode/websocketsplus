@@ -11,8 +11,8 @@ TJ_LIB_DIR="/opt/libjpeg-turbo/lib"; \
 WS_INCLUDES="/usr/local/libwebsockets/include"; \
 WS_LIB_DIR="/usr/local/libwebsockets/lib"; \
 CC=clang++; \
-SOURCE_PATH=/Users/uvaretto/projects/websocketsplus; \
-OUT_PATH=/Users/uvaretto/projects/websocketsplus/tmp-build; \
+SOURCE_PATH=$HOME/projects/websocketsplus; \
+OUT_PATH=$HOME/projects/websocketsplus/tmp-build; \
 $CC -std=c++11 -stdlib=libc++ $SOURCE_PATH/src/examples/osg/osg-stream.cpp \
 $SOURCE_PATH/src/mimetypes.cpp $SOURCE_PATH/src/http.cpp \
 $SOURCE_PATH/src/WebSocketService.cpp \
@@ -21,3 +21,6 @@ $SOURCE_PATH/src/WebSocketService.cpp \
 -lOpenThreads -losgDB -losgGA -losgManipulator -losg -losgUtil -losgViewer \
 -losgText -framework OpenGL -lturbojpeg -lwebsockets -O3 -pthread \
 -o $OUT_PATH/osg-stream.exe
+#export DYLD_LIBRARY_PATH=/usr/local/osg/lib:/usr/local/osg/lib/osgPlugins-3.3.3:$DYLD_LIBRARY_PATH
+#to avoid gl warnings 
+#export OSG_NOTIFY_LEVEL=FATAL
