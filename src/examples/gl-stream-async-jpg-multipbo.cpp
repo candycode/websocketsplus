@@ -396,7 +396,7 @@ int main(int argc, char** argv) {
                                        WSS::ASYNC_REP >("image-stream"));
          //start event loop: one iteration every >= 50ms
         imageStreamer.StartLoop(5, //ms
-                 [](){return !END;} //termination condition (exit on false)
+                 [](){return !END;} //continuation condition (exit on false)
                                   //checked at each iteration, loops forever
                                   //in this case
                  );
