@@ -21,6 +21,7 @@ $SOURCE_PATH/src/WebSocketService.cpp \
 -lOpenThreads -losgDB -losgGA -losgManipulator -losg -losgUtil -losgViewer \
 -losgText -framework OpenGL -lturbojpeg -lwebsockets -O3 -pthread \
 -o $OUT_PATH/osg-stream.exe
+#-DMAX_FRAME_RATE=22
 #export DYLD_LIBRARY_PATH=/usr/local/osg/lib:/usr/local/osg/lib/osgPlugins-3.3.3:$DYLD_LIBRARY_PATH
 #to avoid gl warnings 
 #export OSG_NOTIFY_LEVEL=FATAL

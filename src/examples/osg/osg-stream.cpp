@@ -1,5 +1,12 @@
 // Websockets+ : C++11 server-side websocket library based on libwebsockets;
-//               supports easy creation of services and built-in throttling
+//               supports easy creation of services and built-in throttling.
+// Showing how to stream an opengl framebuffer (50+ fps on MacBookPro Retina)
+// <img>: 70 + FPS not fluid
+// <canvas>: ~60 FPS fluid
+// Firefox slightly faster than Chrome (latest versions as of Nov. 21 2014)
+// Higher frame rated are achieved by disabling vsync: on Apple do download
+// the Graphics Tools package, launch Quartz debug and disable Beam Sync
+//
 // Copyright (C) 2014  Ugo Varetto
 //
 // This program is free software: you can redistribute it and/or modify
@@ -1017,18 +1024,23 @@ int main(int argc, char** argv)
     viewer.getCamera()->setUpdateCallback(
                                     new CameraUpdateCallback(minQuality, maxQuality, quality));
     using namespace chrono;
-    const microseconds T(int(1E6/62.0));
+#ifdef  MAX_FRAME_RATE   
+    const microseconds T(int(1E6 / MAX_FRAME_RATE));
+#endif    
     while(!END) {
         steady_clock::time_point t = steady_clock::now(); 
         HandleMessage();
         viewer.frame();
-        const microseconds E =
-                         duration_cast< microseconds >(steady_clock::now() - t);
+#ifdef MAX_FRAME_RATE    
+        
+         const microseconds E =
+                          duration_cast< microseconds >(steady_clock::now() - t);
 #ifdef TIME_RENDER_STEP
-        cout << double(E.count()) / 1000 << ' ';
+         cout << double(E.count()) / 1000 << ' ';
 #endif                                
-        std::this_thread::sleep_for(
-            max(duration_values< microseconds >::zero(), T - E));
+         std::this_thread::sleep_for(
+             max(duration_values< microseconds >::zero(), T - E));
+#endif             
     }
     is.wait();
     return 0;
