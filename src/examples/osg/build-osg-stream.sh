@@ -3,7 +3,7 @@
 # OpenSceneGraph
 # TurboJPEG
 # libwebsockets
-echo "Building osg-stream.exe - stream an OpenGL context over WebSockets..."
+echo "Building osg-stream.exe - stream an OpenGL framebuffer over WebSockets..."
 OSG_INCLUDES="/usr/local/osg/include"; \
 OSG_LIB_DIR="/usr/local/osg/lib64";\
 TJ_INCLUDES="/opt/libjpeg-turbo/include"; \

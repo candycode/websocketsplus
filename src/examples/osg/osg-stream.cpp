@@ -85,6 +85,10 @@
 using namespace std;
 
 bool END = false;
+//Vertical flip when reading framebuffer
+//ON MacBook Pro with Intel Iris IT IS REQUIRED TO SET THIS TO FALSE
+//WHEN NOT USING DISCRETE (NVIDIA) GPU
+bool VERTICAL_FLIP = true;
 
 template < typename T >
 class SyncQueue {
@@ -542,7 +546,7 @@ void WindowCaptureCallback::ContextData::singlePBO(
                 //420=fast and still unnoticeable but MIGHT NOT WORK
                 //IN SOME BROWSERS
             quality,
-            TJXOP_VFLIP );    
+            VERTICAL_FLIP ? TJXOP_VFLIP : 0 );    
             ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
 
             context->SetServiceDataSync(
@@ -601,7 +605,7 @@ void WindowCaptureCallback::ContextData::multiPBO(
                 //420=fast and still unnoticeable but MIGHT NOT WORK
                 //IN SOME BROWSERS
             quality,
-            TJXOP_VFLIP);
+            VERTICAL_FLIP ? TJXOP_VFLIP : 0);
         ext->glUnmapBuffer(GL_PIXEL_PACK_BUFFER_ARB);
         context->SetServiceDataSync(
                   Image(ImagePtr((char*) c.ptr, TJDeleter(c.size, mem)), 
@@ -806,14 +810,24 @@ int main(int argc, char** argv)
                                                 arguments.getApplicationName());
     arguments.getApplicationUsage()->setCommandLineUsage(
                       arguments.getApplicationName()
-                      + " [--double-pbo | --triple-pbo (default: triple)]"
+                      + " [--single-pbo | --double-pbo |"
+                        " --triple-pbo (default: double)]"
                         " [--view-size width height (default: 1440 900)]"
+                        " [--min-max-quality (default: 10 90)]"
+                        " [--vertical-flip (default: 1 i.e. true)]"
                         " filename ...");
     osg::ApplicationUsage* usage = arguments.getApplicationUsage();
+    usage->addCommandLineOption("--single-pbo", "Use 1 PBO");
     usage->addCommandLineOption("--double-pbo", "Use 2 PBOs");
     usage->addCommandLineOption("--triple-pbo", "Use 3 PBos");
     usage->addCommandLineOption("--view-size width height", 
                                 "Set max view size", "1440 900");
+    usage->addCommandLineOption("--min-max-quality", 
+                                "Min and max image quality, "
+                                "min quality used while moving to save bandwidth",
+                                "10 90");
+    usage->addCommandLineOption("--vertical-flip", "Flip image vertically", "1");
+                                                   
     osgViewer::Viewer viewer(arguments);
     v = &viewer;
     unsigned int helpType = 0;
@@ -871,7 +885,7 @@ int main(int argc, char** argv)
    
     GLenum readBuffer = GL_BACK;
     WindowCaptureCallback::Mode mode = WindowCaptureCallback::DOUBLE_PBO;
-    mode = WindowCaptureCallback::TRIPLE_PBO;
+    mode = WindowCaptureCallback::DOUBLE_PBO;
     while (arguments.read("--single-pbo")) 
         mode = WindowCaptureCallback::SINGLE_PBO;
     while (arguments.read("--double-pbo")) 
@@ -881,7 +895,13 @@ int main(int argc, char** argv)
         
     unsigned int width=1440;
     unsigned int height=900;
+    int minQuality = 10;
+    int maxQuality = 90;
+    int vertFlip = 1;
     arguments.read("--view-size", width, height);
+    arguments.read("--min-max-quality", minQuality, maxQuality);
+    arguments.read("--vertical-flip", vertFlip);
+    VERTICAL_FLIP = vertFlip != 0;
     osg::ref_ptr<osg::GraphicsContext> pbuffer;
     osg::ref_ptr<osg::GraphicsContext::Traits> traits 
         = new osg::GraphicsContext::Traits;
@@ -972,7 +992,8 @@ int main(int argc, char** argv)
 
     class CameraUpdateCallback : public osg::NodeCallback {
     public:
-        CameraUpdateCallback(int& q) : quality_(q) {}
+        CameraUpdateCallback(int minq, int maxq, int& q) :
+         minQuality_(minq), maxQuality_(maxq), quality_(q) {}
          virtual void operator()(osg::Node* node, osg::NodeVisitor* nv) {
             traverse(node,nv);
             osg::Camera* c = (osg::Camera*) node;
@@ -994,7 +1015,7 @@ int main(int argc, char** argv)
  
 
     viewer.getCamera()->setUpdateCallback(
-                                    new CameraUpdateCallback(quality));
+                                    new CameraUpdateCallback(minQuality, maxQuality, quality));
     using namespace chrono;
     const microseconds T(int(1E6/62.0));
     while(!END) {
