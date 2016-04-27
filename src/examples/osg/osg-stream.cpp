@@ -441,10 +441,9 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
                 }
             }
             void read() {
-                osg::GLBufferObject::Extensions* ext =
-                    osg::GLBufferObject::getExtensions(gc_->getState()
-                        ->getContextID(), true);
-                if (ext->isPBOSupported() && !pboBuffer_.empty()) {
+                osg::GLExtensions* ext =
+                   osg::GLExtensions::Get(gc_->getState()->getContextID(), 0);
+                if (ext->isPBOSupported && !pboBuffer_.empty()) {
                     if (pboBuffer_.size()==1) {
                         singlePBO(ext);
                     }
@@ -453,8 +452,8 @@ class WindowCaptureCallback : public osg::Camera::DrawCallback {
                     }
                 }
             }
-            void singlePBO(osg::GLBufferObject::Extensions* ext);
-            void multiPBO(osg::GLBufferObject::Extensions* ext);
+            void singlePBO(osg::GLExtensions* ext);
+            void multiPBO(osg::GLExtensions* ext);
             ~ContextData() {
                 tjDestroy(tj_);
             }
@@ -499,7 +498,7 @@ private:
 };
 
 void WindowCaptureCallback::ContextData::singlePBO(
-                                        osg::GLBufferObject::Extensions* ext) {  
+                                        osg::GLExtensions* ext) {  
     int width = 0, height = 0;
     getSize(gc_, width, height);
     const int prevByteSize = width_  
@@ -564,7 +563,7 @@ void WindowCaptureCallback::ContextData::singlePBO(
 }
 
 void WindowCaptureCallback::ContextData::multiPBO(
-                                        osg::GLBufferObject::Extensions* ext) {
+                                        osg::GLExtensions* ext) {
     static int resizeSteps = 0;
     unsigned int nextPboIndex = (currentPboIndex_+1) % pboBuffer_.size();
     int width=0, height=0;
