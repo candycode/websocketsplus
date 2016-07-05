@@ -89,7 +89,7 @@ int main(int, char**) {
             Context<>(), //context instance, will be copied internally
             WSS::Entry< StreamService, WSS::ASYNC_REP >("myprotocol-stream"));
     //start event loop: one iteration every >= 50ms
-    ws.StartLoop(5000, //ms
+    ws.StartLoop(50, //ms
                  []{return true;} //termination condition (exit on false)
                                   //checked at each iteration, loops forever
                                   //in this case
