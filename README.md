@@ -1,7 +1,7 @@
 Websockets+
 ===========
 
-C++11 web socket service based on [libwebsockets](https://github.com/warmcat/libwebsockets) 
+C++11 web socket service based on [libwebsockets](https://github.com/warmcat/libwebsockets) version 1.5.x.
 Websocket+ is distributed under the terms of the GNU Lesser General Public License version 3. A copy of the license is distributed together with the source code; check
 the files LICENSE and LICENSE.lesser for details.
 
