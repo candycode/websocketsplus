@@ -235,6 +235,7 @@ public:
         const static SendMode sendMode = SM;
         ///Constructor
         /// @param n protocol name
+        /// @param rx receive buffer size, zero for default
         Entry(const std::string& n, int rx = 0) : name(n), rxBufSize(rx) {}
     };
 public:
@@ -520,6 +521,7 @@ private:
                size_t len);
     ///Send data to clients, greedy flags specifies id send should be performed
     ///in a loop or with multiple calls to Send
+    ///@return @c true if all data in frame is sent, @c false otherwise
     template < typename C, typename S >
     static bool Send(lws_context *context,
                      lws* wsi,
@@ -534,8 +536,10 @@ private:
         bool done = false;
         const int chunkSize = s->GetSuggestedOutChunkSize();   
         while(!done) {
+            //retrieve data frame
             const DF df = s->Get(chunkSize);    
             const size_t bsize = df.frameEnd - df.frameBegin;
+            //done iff end of frame equals the end of buffer
             done = df.frameEnd == df.bufferEnd;
             const bool begin = df.frameBegin == df.bufferBegin;
             const size_t bytesToWrite = s->PreformattedBuffer() 

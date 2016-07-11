@@ -79,7 +79,7 @@ int main(int, char**) {
 // Sample html code to test service, use either 'myprotocol' for req-rep or
 // myprotocol-async' for async processing.
 // When testing with async processing also try to have Service::Data() always
-// return true or return true a fixed number of time after each Put
+// return true or return true a fixed number of time  after each Put
 // <!DOCTYPE html>
 // <html>
 //    <head>
