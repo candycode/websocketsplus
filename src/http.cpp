@@ -28,7 +28,7 @@
 #include "http.h"
 
 namespace wsp {
-Request ParseHttpHeader(libwebsocket *wsi) {
+Request ParseHttpHeader(lws *wsi) {
     //copied from test-server.c part of libwebsockets distribution.
     static const char *tokenNames[] = {
         /*[WSI_TOKEN_GET_URI]       =*/ "GET URI",
