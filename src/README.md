@@ -1,13 +1,14 @@
 Workflow
 ========
 
-1. Create web socket service:
+**I Create web socket service:**
+
 
 ```cpp
 WebSocketService ws;
 ```
 
-2. Invoke `WebSocketService::Init` specifying:
+**II Invoke `WebSocketService::Init` specifying:**
 
 1. Internet port
 2. SSL certificate path (optional)
@@ -39,7 +40,7 @@ WebSocketService ws;
     );
 ```
 
-3. Start service event loop
+**III Start service event loop**
 
 ```cpp
     //start event loop: one iteration every >= 50ms
@@ -51,7 +52,8 @@ WebSocketService ws;
 ```
 
 Memory management
------------------
+=================
+
 
 Service object is allocated into memory region allocated by libwebsockets...
 
