@@ -658,6 +658,8 @@ int WebSocketService::WSCallback(
         case LWS_CALLBACK_ESTABLISHED: {
             C* c = reinterpret_cast< C* >(lws_context_user(context));
             c->InitSession(user);
+            // user points to a memory region pre-allocated by
+            // libwesockets of size = sizeof(S), see
             new (user) S(c);
             const S* s = reinterpret_cast< const S* >(user);
             if(s->Sending()) {
