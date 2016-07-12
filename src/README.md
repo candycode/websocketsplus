@@ -113,7 +113,7 @@ int WebSocketService::WSCallback(
 ```
 
 Context Interface
------------------
+=================
 
 Context is a template parameter passed to WebSocketService used to
 share per-session data among requests and replies.
@@ -131,7 +131,7 @@ share per-session data among requests and replies.
 
 
 Service Interface
------------------
+=================
 
 Implementation of the actual service.
 
