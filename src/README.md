@@ -17,7 +17,7 @@ WebSocketService ws;
 5. Variadic template list of services wrappend with `WebSocketService::Entry`
 
 ```cpp
- using Service = SessionService< Context<> >;
+    using Service = SessionService< Context<> >;
     const int readBufferSize = 4096; //the default anyway
     //init service
     ws.Init(9001, //port
