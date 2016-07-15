@@ -80,12 +80,9 @@ using Protocols = std::vector< lws_protocols >;
 // virtual bool Data() const 
 // /// Returns a reference to the data to send; called when libwebsockets needs
 // /// to send data to clients;
-// /// @param binary @true if data is in binary format, @false if it is text
 // virtual const DataFrame& Get(int requestedChunkLength) const 
 // /// Called when libwebsockets receives data from clients
 // virtual void Put(void* p, size_t len, bool done)
-// /// Update write data frame 
-// virtual void UpdateOutBuffer(int writtenBytes)
 // /// Set size of suggested send chunk size; WebSocketService might
 // /// decide to use a different size if/when needed 
 // virtual void SetSuggestedOutChunkSize(int cs)
@@ -723,7 +720,6 @@ int WebSocketService::WSCallback(
 
                 lws_callback_on_writable(wsi);
             }
-
         }
         break;
         case LWS_CALLBACK_CLOSED:

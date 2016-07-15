@@ -14,8 +14,9 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 #pragma once
+#include <algorithm>
+
 namespace wsp {
 // data frame information returned by Service::Get() and used
 // to send data to clients
@@ -39,6 +40,8 @@ struct DataFrame {
     const char* frameEnd = nullptr;
     /// @c true if data is binary, @c false if it is text
     bool binary = false;
+    /// @c true if data is valid
+    bool valid = false;
     /// Default constructor
     DataFrame() = default;
     /// Constructor
@@ -50,8 +53,43 @@ struct DataFrame {
     /// @param b binary flag, true if binary, false if text
     DataFrame(const char* bb, const char* be,
               const char* fb, const char* fe,
-              bool b)
+              bool b, bool v = true)
     : bufferBegin(bb), bufferEnd(be),
-      frameBegin(fb), frameEnd(fe), binary(b) {}
-}; 
+      frameBegin(fb), frameEnd(fe), binary(b), valid(v) {}
+};
+
+inline bool Update(DataFrame& df, size_t chunkLength) {
+    if(df.frameBegin < df.bufferEnd) {
+        requestedChunkLength = std::min(requestedChunkLength,
+                                        int(df.bufferEnd -
+                                            df.frameBegin));
+        df.frameEnd = df.frameBegin + requestedChunkLength;
+        return true;
+    } else return false;
+}
+
+inline bool Consumed(const DataFrame& df) {
+    return df.bufferBegin >= df.frameEnd;
+}
+
+inline bool Unused(const DataFrame& df) {
+    return df.bufferBegin == df.bufferEnd;
+}
+
+inline void Invalidate(DataFrame& df) {
+    df.valid = false;
+}
+
+inline void Validate(DataFrame& df) {
+    df.valid = true;
+}
+
+inline bool Valid(const DataFrame& df) {
+    return df.valid;
+}
+
+inline void Init(DataFrame& df, char* begin, size_t size) {
+    df = DataFrame(begin, begin + size, begin, begin, true);
+}
+
 }

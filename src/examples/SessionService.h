@@ -32,6 +32,7 @@
 /// the class that handles incoming requests and sends back replies.
 /// SessionService instances get created when a WebSocket connection is
 /// established and deleted when the connection terminates.
+/// A single buffer is used to store incoming messages and send responses.
 template < typename ContextT >
 class SessionService {
 public:
