@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-//clang++ -std=c++11 -I ../src -I /usr/local/libwebsockets/include \ 
+//clang++ -std=c++11 -I ../src -I /usr/local/libwebsockets/include
 //../src/examples/example-streaming.cpp ../src/WebSocketService.cpp 
 //-L /usr/local/libwebsockets/lib -lwebsockets
 
@@ -39,7 +39,8 @@
 class StreamService : public SessionService< wsp::Context<> > {
 public:
     using DataFrame = SessionService::DataFrame;
-    StreamService(Context* c) : SessionService(c), time_(0x100, 0) {}
+    StreamService(Context* c, const char* = nullptr) :
+            SessionService(c), time_(0x100, 0) {}
     bool Data() const { return true; }
     const DataFrame& Get(int requestedChunkLength) {
         using namespace std::chrono;

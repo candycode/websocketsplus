@@ -596,11 +596,10 @@ private:
         const size_t bytesToWrite = df.frameEnd - df.frameBegin;
         if(bytesToWrite < 1) return true;         
         const int bytesWritten                                    
-                 = lws_write(
-                                      wsi, 
-                                      (unsigned char*) df.frameBegin,
-                                      bytesToWrite, //<= chunkSize
-                                      LWS_WRITE_HTTP);
+                 = lws_write(wsi,
+                             (unsigned char*) df.frameBegin,
+                             bytesToWrite, //<= chunkSize
+                             LWS_WRITE_HTTP);
         if(bytesWritten < 0) return true;
         const bool done = df.frameBegin + bytesWritten == df.frameEnd;
         s->UpdateOutBuffer(bytesWritten);
@@ -657,7 +656,7 @@ int WebSocketService::WSCallback(
             c->InitSession(user);
             // user points to a memory region pre-allocated by
             // libwesockets of size = sizeof(S), see
-            new (user) S(c);
+            new (user) S(c, lws_get_protocol(wsi)->name);
             const S* s = reinterpret_cast< const S* >(user);
             if(s->Sending()) {
                 lws_callback_on_writable(wsi);

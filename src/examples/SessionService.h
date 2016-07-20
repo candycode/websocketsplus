@@ -74,7 +74,7 @@ public:
     /// Constructor taking a reference to a Context instance. This constructor
     /// is invoked when a new connection is established through a call to 
     /// a placement new
-    SessionService(Context*) 
+    SessionService(Context*, const char* = nullptr)
         : writeDataFrame_(nullptr, nullptr, nullptr, nullptr, BINARY_OPTION) {
 
         }

@@ -34,6 +34,7 @@
 #include <chrono>
 #include <algorithm>
 #include <deque>
+#include <functional>
 
 #include <cassert>
 #include <vector>
@@ -45,42 +46,44 @@ namespace {
     static const bool BINARY_OPTION = false;
 }
 
-template < typename FunT, typename ContextT = wsp::ContexT<> >
+template < typename FunT, typename ContextT = wsp::Context< FunT > >
 class FunService {
 public:
     using Context = ContextT;
     using DataFrame = wsp::DataFrame;
 public:
     FunService() = delete;
-    FunService(Context*)
+    FunService(Context* ctx, const char* protocol = nullptr)
            : replyDataFrame_(nullptr, nullptr, nullptr, nullptr,
-                             BINARY_OPTION) {
+                             BINARY_OPTION),
+             fun_(ctx->GetServiceData()) {
 
     }
     bool PreformattedBuffer() const { return false; }
     bool Data() const {
-        return Valid(replyDataFrame_);
+        //either there is data in reply buffer or there is data
+        //in reply queue
+        return !replies_.empty();
     }
-    const DataFrame& Get(int requestedChunkLength) const {
+    const DataFrame& Get(int requestedChunkLength) /*const*/ {
         //if data has been consumed remove entry and pop
         //new data if available
-        if((Consumed(replyDataFrame_)
-           || Unused(replyDataFrame_))
-           && dataAvailable_) {
+        if((wsp::Consumed(replyDataFrame_)
+           || wsp::Unused(replyDataFrame_))
+           && Data()) {
             //only remove data if already used
-            if(Consumed(replyDataFrame_)) replies_.pop_front();
+            if(wsp::Consumed(replyDataFrame_)) replies_.pop_front();
+            //if data in queue make dataframe point to front of queue
             if(!replies_.empty()) {
-                Init(replyDataFrame_, replies_.front(),
-                     replies_.front().size());
-            } else {
-                Invalidate(replyDataFrame_);
-                dataAvailable_ = false;
+                wsp::Init(replyDataFrame_, replies_.front().data(),
+                          replies_.front().size());
+            } else { //else
+                wsp::Invalidate(replyDataFrame_);
             }
         }
         //if data available update data frame
-        if(!Update(replyDataFrame_, requestedChunkLegth)) {
-            Invalidate(replyDataFrame_);
-            dataAvailable_ = false;
+        if(!wsp::Update(replyDataFrame_, requestedChunkLength)) {
+            wsp::Invalidate(replyDataFrame_);
         }
         return replyDataFrame_;
     }
@@ -93,8 +96,7 @@ public:
                   (const char*) p + len, requestBuffer_.data() + prev);
         //sync execution: data is transformed after read buffer is filled
         if(done) {
-            replies_.push_back(Apply(requestBuffer_));
-            dataAvailable_ = true;
+            replies_.push_back(fun_(requestBuffer_));
         }
     }
     void SetSuggestedOutChunkSize(int cs) {
@@ -110,9 +112,12 @@ public:
         this->~FunService();
     }
     /// Minimum delay between consecutive writes in seconds.
-    virtual std::chrono::duration< double >
+    std::chrono::duration< double >
     MinDelayBetweenWrites() const {
         return std::chrono::duration< double >(0);
+    }
+    void UpdateOutBuffer(size_t requestedChunkLength) {
+        wsp::Update(replyDataFrame_, requestedChunkLength);
     }
 private:
     /// destructor, never called through delete since instances of
@@ -120,21 +125,20 @@ private:
     /// and destroyed through a call to Destroy()
     virtual ~FunService() {}
 private:
-    std::queue< vector< char > > replies_;
+    std::deque< std::vector< char > > replies_;
     DataFrame replyDataFrame_;
-    std::vector< char > requestBuffer_;
-    mutable bool dataAvailable_ = false;
+    std::vector< char > requestBuffer_; //temporary request storage
     int suggestedWriteChunkSize_ = 4096;
+    FunT fun_;
 };
 
 
 
 //==============================================================================
 
-
-
 //------------------------------------------------------------------------------
-/// Simple echo test driver, check below 'main' for matching html client code 
+///
+using namespace std;
 int main(int, char**) {
     using namespace wsp;
     using WSS = WebSocketService;
@@ -145,17 +149,25 @@ int main(int, char**) {
         std::cout << WSS::Level(level) << "> " << msg << std::endl;
     };
     WSS::SetLogger(log, "NOTICE", "WARNING", "ERROR");
-    using Service = SessionService< Context<> >;
+    using ReverseFunT = function< vector< char > (const vector< char >&) >;
+    using ReverseService = FunService< ReverseFunT >;
     const int readBufferSize = 4096; //the default anyway
+    ReverseFunT reverse = [](const vector< char >& v) {
+        vector< char > ret(v.size());
+        copy(v.rbegin(), v.rend(), ret.begin());
+        return ret;
+    };
+
+
     //init service
     ws.Init(9001, //port
             nullptr, //SSL certificate path
             nullptr, //SSL key path
-            Context<>(), //context instance, will be copied internally
+            Context< ReverseFunT >(reverse), //context instance, will be copied internally
             //protocol->service mapping
             //sync request-reply: at each request a reply is immediately sent
             //to the client
-            WSS::Entry< ReverseService, WSS::REQ_REP >("reverse", readBufferSize),
+            WSS::Entry< ReverseService, WSS::REQ_REP >("reverse", readBufferSize)
 
     );
     //start event loop: one iteration every >= 50ms
@@ -166,54 +178,3 @@ int main(int, char**) {
                  );
     return 0;
 }
-
-//------------------------------------------------------------------------------
-// Sample html code to test service, use either 'myprotocol' for req-rep or
-// myprotocol-async' for async processing.
-// When testing with async processing also try to have Service::Data() always
-// return true or return true a fixed number of time  after each Put
-// <!DOCTYPE html>
-// <html>
-//    <head>
-//        <meta charset="utf-8">
-//        <script src=
-//   "http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
-//        <script type="text/javascript">
-//            $(function() {
-//                window.WebSocket = window.WebSocket || window.MozWebSocket;
-
-//                var websocket = new WebSocket('ws://127.0.0.1:9000',
-//                                              'myprotocol-async');
-
-//                websocket.onopen = function () {
-//                    $('h1').css('color', 'green');
-//                };
-
-//                websocket.onerror = function () {
-//                    $('h1').css('color', 'red');
-//                };
-
-//                websocket.onmessage = function (message) {
-//                    console.log(message.data);
-//                    $('div').append($('<p>', { text: message.data }));
-//                };
-               
-
-//                $('button').click(function(e) {
-//                    e.preventDefault();
-//                    websocket.send($('input').val());
-//                    $('input').val('');
-//                });
-//            });
-//        </script>
-//        </head>
-//    <body>
-//        <h1>WebSockets test</h1>
-//        <form>
-//            <input type="text" />
-//            <button>Send</button>
-//        </form>
-//        <div></div>
-//    </body>
-// </html>
-

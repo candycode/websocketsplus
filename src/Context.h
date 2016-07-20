@@ -62,14 +62,14 @@ public:
     ServiceData& GetServiceData() { return serviceData_; }
     /// Return constant reference to ServiceData instance: this is what
     /// services use to access data
-    void GetServiceDataSync(ServiceData& sd) const { 
+    void GetServiceDataSync(ServiceData& sd) const {
         std::lock_guard< std::mutex > guard(mutex_);
-        sd = serviceData_; 
+        sd = serviceData_;
     }
      /// Return constant reference to ServiceData instance: this is what
     /// services use to access data
-    bool GetServiceDataTrySync(ServiceData& sd) const { 
-        if(mutex_.try_lock()) return false; 
+    bool GetServiceDataTrySync(ServiceData& sd) const {
+        if(mutex_.try_lock()) return false;
         sd = serviceData_;
         return true;
     }

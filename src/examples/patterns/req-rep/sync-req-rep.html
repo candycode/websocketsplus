@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src=
+                    "https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script type="text/javascript">
+        function ab2str(buf) {
+            return String.fromCharCode.apply(null, new Uint8Array(buf));
+        }
+
+        var start, end;
+        $(function() {
+
+           window.WebSocket = window.WebSocket || window.MozWebSocket;
+
+           var websocket = new WebSocket('ws://127.0.0.1:9001',
+                                         'reverse');
+
+           websocket.binaryType = "arraybuffer";
+
+           websocket.onopen = function () {
+               $('h1').css('color', 'green');
+           };
+
+           websocket.onerror = function (e) {
+               $('h1').css('color', 'red');
+               console.log(e.msg);
+           };
+           websocket.onmessage = function (e) {
+               console.log("Received " + ab2str(e.data));
+               $('div').css('font-family', 'Courier New');
+               $('div').append($('<p>', { html:   ab2str(e.data) }));
+
+           };
+           function sendText(msg) {
+              try {
+                var buffer = new Array();
+                for(var i = 0; i < msg.length; i++) buffer[i] = msg[i];
+                var sbuf = buffer.join("");
+                websocket.send(sbuf);
+                console.log('Sent ' + sbuf);
+              } catch(except) {
+                console.log(except);
+              }
+           }
+           $('button').click(function(e) {
+              try {
+                  e.preventDefault();
+                  if($('input').val().length == 0) return;
+                  console.log("Sending...");
+                  sendText($('input').val());
+              } catch(except) {
+                console.log(except);
+              }
+           });
+        });
+       </script>
+</head>
+<body>
+<h1>WebSockets test</h1>
+<form>
+    <p>Enter text:</p>
+    <input type="text" />
+    <button>Send</button>
+</form>
+<div></div>
+</body>
+</html>
+

@@ -60,16 +60,15 @@ struct DataFrame {
 
 inline bool Update(DataFrame& df, size_t chunkLength) {
     if(df.frameBegin < df.bufferEnd) {
-        requestedChunkLength = std::min(requestedChunkLength,
-                                        int(df.bufferEnd -
-                                            df.frameBegin));
-        df.frameEnd = df.frameBegin + requestedChunkLength;
+        chunkLength = std::min(chunkLength,
+                               size_t(df.bufferEnd - df.frameBegin));
+        df.frameEnd = df.frameBegin + chunkLength;
         return true;
     } else return false;
 }
 
 inline bool Consumed(const DataFrame& df) {
-    return df.bufferBegin >= df.frameEnd;
+    return df.bufferBegin && df.bufferBegin >= df.frameEnd;
 }
 
 inline bool Unused(const DataFrame& df) {
