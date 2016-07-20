@@ -24,6 +24,7 @@
 #include <mutex>
 #include <utility>
 #include <algorithm>
+#include <tuple>
 
 namespace wsp {
 
@@ -33,7 +34,46 @@ using Buffers = std::vector< Buffer >;
 using BufferMap = std::map< void*, Buffers >;
 using TimerMap = std::map< void*, std::chrono::steady_clock::time_point >;
 
-struct ServiceDataEmpty {};
+
+//Helper class
+
+//template:
+//I current index
+//T type to search for
+//H head of type list
+//TailT tail of type list
+template < int I, typename T, typename H, typename...TailT >
+struct MapHelper {
+    enum {id = MapHelper< I + 1, T, TailT... >::id};
+};
+
+//template specialization: type found case
+//I current index assigned to id field
+//T type to search for
+//ArgsT type list: head type matches T
+template < int I, typename T, typename... ArgsT >
+struct MapHelper< I, T, T, ArgsT... > {
+    enum {id = I};
+};
+
+//template specialization: termination condition: last type matches T
+template < int I, typename T >
+struct MapHelper< I, T, T > {
+    enum {id = I};
+};
+
+//template specialization: termination condition: last type does not match T
+//set id to -1 (not found)
+template < int I, typename T, typename U >
+struct MapHelper< I, T, U> {
+    enum {id = -1};
+};
+
+//Map type to position in type list
+template < typename T, typename... ArgsT >
+struct Map {
+    enum {value = MapHelper< 0,  T, ArgsT... >::id};
+};
 
 //------------------------------------------------------------------------------
 /// Context implementation: provides storage space to per-session services.
@@ -43,72 +83,80 @@ struct ServiceDataEmpty {};
 ///         without having to create a separate Context class.
 ///         ServiceDataT instances are used to share data among all the 
 ///         instances of per-session service instances
-template < typename ServiceDataT = ServiceDataEmpty >
-class Context {
+template < typename...ServiceDataT >
+class MultiContext {
 public:
-    using ServiceData = ServiceDataT;
+    using ServiceData = std::tuple< ServicesT::DataType... >;
     /// Default constructor
     Context() {} 
     /// Constructor accepting a ServiceData type instance
-    Context(const ServiceData& sd) : serviceData_(sd) {}
+    Context(const ServiceData&... sd) : serviceData_(sd...) {}
     /// Copy constructor
     Context(const Context& c) 
         : buffers_(c.buffers_), writeTimers_(c.writeTimers_),
           serviceData_(c.serviceData_) {}
+
+
     /// Return constant reference to ServiceData instance: this is what
     /// services use to access data
-    const ServiceData& GetServiceData() const { return serviceData_; }
+    template < typename ServiceT >
+    const ServiceT::DataType& GetServiceData() const {
+        return std::get< Map< ServiceT, ServicesT... >::value >(serviceData_);
+    }
     /// Return non-const reference to data @todo remove
-    ServiceData& GetServiceData() { return serviceData_; }
-    /// Return constant reference to ServiceData instance: this is what
-    /// services use to access data
-    void GetServiceDataSync(ServiceData& sd) const {
-        std::lock_guard< std::mutex > guard(mutex_);
-        sd = serviceData_;
+    template < typename ServiceT >
+    Service::DataType& GetServiceData() {
+        return std::get< Map< ServiceT, ServicesT... >::value >(serviceData_);
     }
-     /// Return constant reference to ServiceData instance: this is what
-    /// services use to access data
-    bool GetServiceDataTrySync(ServiceData& sd) const {
-        if(mutex_.try_lock()) return false;
-        sd = serviceData_;
-        return true;
-    }
-    /// Set service data: this is used by business logic to make data
-    /// available to services
-    void SetServiceData(const ServiceData& sd) {
-        serviceData_ = sd;
-    }
-    void SetServiceData(ServiceData&& sd) {
-        serviceData_ = sd; //= operator must implement move operation
-    }
-    /// Set service data: this is used by business logic to make data
-    /// available to services
-    void SetServiceDataSync(const ServiceData& sd) {
-        std::lock_guard< std::mutex > guard(mutex_);
-        SetServiceData(sd);
-    }
-    void SetServiceDataSync(ServiceData&& sd) {
-        std::lock_guard< std::mutex > guard(mutex_);
-        SetServiceData(std::move(sd));
-    }
-    void SetServiceDataSyncSwap(ServiceData& sd) {
-        std::lock_guard< std::mutex > guard(mutex_);
-        std::swap(sd, serviceData_);
-    }
-    bool SetServiceDataTrySync(const ServiceData& sd) {
-        if(mutex_.try_lock()) {
-            SetServiceData(sd);
-            return true;
-        }
-        return false;
-    }
-    bool SetServiceDataTrySync(ServiceData&& sd) {
-        if(mutex_.try_lock()) {
-            SetServiceData(std::move(sd));
-            return true;
-        }
-        return false;
-    }
+//    /// Return constant reference to ServiceData instance: this is what
+//    /// services use to access data
+//    void GetServiceDataSync(ServiceData& sd) const {
+//        std::lock_guard< std::mutex > guard(mutex_);
+//        sd = serviceData_;
+//    }
+//     /// Return constant reference to ServiceData instance: this is what
+//    /// services use to access data
+//    bool GetServiceDataTrySync(ServiceData& sd) const {
+//        if(mutex_.try_lock()) return false;
+//        sd = serviceData_;
+//        return true;
+//    }
+//    /// Set service data: this is used by business logic to make data
+//    /// available to services
+//    void SetServiceData(const ServiceData& sd) {
+//        serviceData_ = sd;
+//    }
+//    void SetServiceData(ServiceData&& sd) {
+//        serviceData_ = sd; //= operator must implement move operation
+//    }
+//    /// Set service data: this is used by business logic to make data
+//    /// available to services
+//    void SetServiceDataSync(const ServiceData& sd) {
+//        std::lock_guard< std::mutex > guard(mutex_);
+//        SetServiceData(sd);
+//    }
+//    void SetServiceDataSync(ServiceData&& sd) {
+//        std::lock_guard< std::mutex > guard(mutex_);
+//        SetServiceData(std::move(sd));
+//    }
+//    void SetServiceDataSyncSwap(ServiceData& sd) {
+//        std::lock_guard< std::mutex > guard(mutex_);
+//        std::swap(sd, serviceData_);
+//    }
+//    bool SetServiceDataTrySync(const ServiceData& sd) {
+//        if(mutex_.try_lock()) {
+//            SetServiceData(sd);
+//            return true;
+//        }
+//        return false;
+//    }
+//    bool SetServiceDataTrySync(ServiceData&& sd) {
+//        if(mutex_.try_lock()) {
+//            SetServiceData(std::move(sd));
+//            return true;
+//        }
+//        return false;
+//    }
 public:
     /// Return reference to buffer
     /// @param p pointer key indexing the per-session buffer arrays; this is
@@ -204,12 +252,5 @@ private:
     ///mutex to synchronize access to shared service resource
     mutable std::mutex mutex_; 
 };
-
-
-template < typename T >
-Context< T > MakeContext(const T& d) {
-    return Context< T >(d);
-}
-
 
 } //namespace wsp 

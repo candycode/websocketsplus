@@ -28,8 +28,8 @@
                console.log(e.msg);
            };
            websocket.onmessage = function (e) {
-               $('div').css('font-family', 'Courier New');
-               $('div').append($('<p>', { html:  ab2str(e.data) }));
+               $('#output').css('font-family', 'Courier New');
+               $('#output').append($('<p>', { html:  ab2str(e.data) }));
 
            };
            function sendText(msg) {
@@ -45,8 +45,8 @@
            $('button').click(function(e) {
               try {
                   e.preventDefault();
-                  if($('input').val().length == 0) return;
-                  sendText($('input').val());
+                  if($('#text').val().length == 0) return;
+                  sendText($('#text').val());
               } catch(except) {
                 console.log(except);
               }
@@ -57,11 +57,17 @@
 <body>
 <h1>WebSockets test</h1>
 <form>
-    <p>Enter text:</p>
-    <input type="text" />
+    <div>
+        <p>Protocol ('reverse' or 'echo') - not implemented yet</p>
+        <input id="proto" type="text"/>
+    </div>
+    <div>
+        <p>Enter text:</p>
+        <input id="text" type="text" />
+    </div>
     <button>Send</button>
 </form>
-<div></div>
+<div id="output"></div>
 </body>
 </html>
 

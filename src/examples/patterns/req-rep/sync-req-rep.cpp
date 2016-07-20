@@ -44,7 +44,7 @@ namespace {
     static const bool BINARY_OPTION = false;
 }
 
-template < typename FunT, typename ContextT = wsp::Context< FunT > >
+template < typename FunT, typename ContextT  >
 class FunService {
 public:
     using Context = ContextT;
@@ -54,7 +54,7 @@ public:
     FunService(Context* ctx, const char* protocol = nullptr)
            : replyDataFrame_(nullptr, nullptr, nullptr, nullptr,
                              BINARY_OPTION),
-             fun_(ctx->GetServiceData()) {
+             fun_(ctx->GetServiceData().template Get< FunT >(protocol)) {
 
     }
     bool PreformattedBuffer() const { return false; }
@@ -134,6 +134,41 @@ private:
 //------------------------------------------------------------------------------
 ///
 using namespace std;
+
+using FunT = function< vector< char > (const vector< char >&) >;
+FunT reverse = [](const vector< char >& v) {
+    vector< char > ret(v.size());
+    copy(v.rbegin(), v.rend(), ret.begin());
+    return ret;
+};
+FunT echo = [](const vector< char >& v) {
+    return v;
+};
+
+//note template is currently useless since the return type is the same
+
+struct Functions {
+    Functions(const FunT& r, const FunT& e)
+            : reverse(r), echo(e) {}
+    FunT reverse;
+    FunT echo;
+    template < typename T >
+    const T& Get(const char* protocol) const;
+};
+
+
+template <>
+const FunT& Functions::Get< FunT >(const char* protocol) const {
+    if(protocol == string("reverse")) return this->reverse;
+    else if(protocol == string("echo")) return this->echo;
+    else {
+        static const FunT f;
+        return f;
+    }
+}
+
+
+
 int main(int, char**) {
     using namespace wsp;
     using WSS = WebSocketService;
@@ -144,25 +179,22 @@ int main(int, char**) {
         std::cout << WSS::Level(level) << "> " << msg << std::endl;
     };
     WSS::SetLogger(log, "NOTICE", "WARNING", "ERROR");
-    using ReverseFunT = function< vector< char > (const vector< char >&) >;
-    using ReverseService = FunService< ReverseFunT >;
     const int readBufferSize = 4096; //the default anyway
-    ReverseFunT reverse = [](const vector< char >& v) {
-        vector< char > ret(v.size());
-        copy(v.rbegin(), v.rend(), ret.begin());
-        return ret;
-    };
 
+    using ReverseService = FunService< FunT, Context< Functions > >;
+    using EchoService    = FunService< FunT, Context< Functions > >;
 
     //init service
     ws.Init(9001, //port
             nullptr, //SSL certificate path
             nullptr, //SSL key path
-            Context< ReverseFunT >(reverse), //context instance, will be copied internally
+            //context instance, will be copied internally
+            MakeContext(Functions(::reverse, echo)),
             //protocol->service mapping
             //sync request-reply: at each request a reply is immediately sent
             //to the client
-            WSS::Entry< ReverseService, WSS::REQ_REP >("reverse", readBufferSize)
+            WSS::Entry< ReverseService, WSS::REQ_REP >("reverse", readBufferSize),
+            WSS::Entry< EchoService, WSS::REQ_REP >("echo", readBufferSize)
 
     );
     //start event loop: one iteration every >= 50ms
