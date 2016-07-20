@@ -28,9 +28,8 @@
                console.log(e.msg);
            };
            websocket.onmessage = function (e) {
-               console.log("Received " + ab2str(e.data));
                $('div').css('font-family', 'Courier New');
-               $('div').append($('<p>', { html:   ab2str(e.data) }));
+               $('div').append($('<p>', { html:  ab2str(e.data) }));
 
            };
            function sendText(msg) {
@@ -39,7 +38,6 @@
                 for(var i = 0; i < msg.length; i++) buffer[i] = msg[i];
                 var sbuf = buffer.join("");
                 websocket.send(sbuf);
-                console.log('Sent ' + sbuf);
               } catch(except) {
                 console.log(except);
               }
@@ -48,7 +46,6 @@
               try {
                   e.preventDefault();
                   if($('input').val().length == 0) return;
-                  console.log("Sending...");
                   sendText($('input').val());
               } catch(except) {
                 console.log(except);

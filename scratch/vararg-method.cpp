@@ -60,5 +60,7 @@ int main(int, char**) {
     static_assert(Map< char, int, char >::id == 1, "Wrong index");
     static_assert(Map< char, float, int, double >::id == -1, "Wrong index");
 
+    static_assert(Unique< int, float, double >::value, "Not unique");
+
     return EXIT_SUCCESS;
 }

@@ -31,8 +31,6 @@
 #include <WebSocketService.h>
 #include <Context.h>
 #include <DataFrame.h>
-#include <chrono>
-#include <algorithm>
 #include <deque>
 #include <functional>
 
@@ -68,22 +66,18 @@ public:
     const DataFrame& Get(int requestedChunkLength) /*const*/ {
         //if data has been consumed remove entry and pop
         //new data if available
-        if((wsp::Consumed(replyDataFrame_)
-           || wsp::Unused(replyDataFrame_))
-           && Data()) {
+        if(Data()) {
             //only remove data if already used
             if(wsp::Consumed(replyDataFrame_)) replies_.pop_front();
             //if data in queue make dataframe point to front of queue
             if(!replies_.empty()) {
                 wsp::Init(replyDataFrame_, replies_.front().data(),
                           replies_.front().size());
-            } else { //else
-                wsp::Invalidate(replyDataFrame_);
             }
         }
         //if data available update data frame
         if(!wsp::Update(replyDataFrame_, requestedChunkLength)) {
-            wsp::Invalidate(replyDataFrame_);
+            wsp::Reset(replyDataFrame_);
         }
         return replyDataFrame_;
     }
@@ -97,6 +91,7 @@ public:
         //sync execution: data is transformed after read buffer is filled
         if(done) {
             replies_.push_back(fun_(requestBuffer_));
+            requestBuffer_.resize(0);
         }
     }
     void SetSuggestedOutChunkSize(int cs) {

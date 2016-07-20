@@ -40,8 +40,6 @@ struct DataFrame {
     const char* frameEnd = nullptr;
     /// @c true if data is binary, @c false if it is text
     bool binary = false;
-    /// @c true if data is valid
-    bool valid = false;
     /// Default constructor
     DataFrame() = default;
     /// Constructor
@@ -53,42 +51,31 @@ struct DataFrame {
     /// @param b binary flag, true if binary, false if text
     DataFrame(const char* bb, const char* be,
               const char* fb, const char* fe,
-              bool b, bool v = true)
+              bool b)
     : bufferBegin(bb), bufferEnd(be),
-      frameBegin(fb), frameEnd(fe), binary(b), valid(v) {}
+      frameBegin(fb), frameEnd(fe), binary(b) {}
 };
 
 inline bool Update(DataFrame& df, size_t chunkLength) {
     if(df.frameBegin < df.bufferEnd) {
         chunkLength = std::min(chunkLength,
                                size_t(df.bufferEnd - df.frameBegin));
-        df.frameEnd = df.frameBegin + chunkLength;
+        df.frameBegin = df.frameEnd;
+        df.frameEnd = df.frameEnd + chunkLength;
         return true;
     } else return false;
 }
 
 inline bool Consumed(const DataFrame& df) {
-    return df.bufferBegin && df.bufferBegin >= df.frameEnd;
-}
-
-inline bool Unused(const DataFrame& df) {
-    return df.bufferBegin == df.bufferEnd;
-}
-
-inline void Invalidate(DataFrame& df) {
-    df.valid = false;
-}
-
-inline void Validate(DataFrame& df) {
-    df.valid = true;
-}
-
-inline bool Valid(const DataFrame& df) {
-    return df.valid;
+    return df.bufferEnd && df.frameEnd >= df.bufferEnd;
 }
 
 inline void Init(DataFrame& df, char* begin, size_t size) {
     df = DataFrame(begin, begin + size, begin, begin, true);
+}
+
+inline void Reset(DataFrame& df) {
+    df.bufferBegin = df.frameEnd;
 }
 
 }
