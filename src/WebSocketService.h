@@ -716,7 +716,6 @@ int WebSocketService::WSCallback(
             else c->RecordWriteTime(user);
             if(!allSent 
                || s->Sending()) {
-
                 lws_callback_on_writable(wsi);
             }
         }

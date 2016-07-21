@@ -60,8 +60,9 @@ public:
              fun_(ctx->GetServiceData().template Get< FunT >(protocol)),
              stop_(false) {
         auto f = [this]() {
-            while(!this->stop_)
+            while(!this->stop_) {
                 this->replies_.Push(this->fun_(this->requests_.Pop()));
+            }
         };
         taskFuture_ = std::async(std::launch::async, f);
 
@@ -70,19 +71,16 @@ public:
     bool Data() const {
         //either there is data in reply buffer or there is data
         //in reply queue
-        return !replies_.Empty();
+        return !replies_.Empty() || !reply_.empty();
     }
     const DataFrame& Get(int requestedChunkLength) /*const*/ {
         //if data has been consumed remove entry and pop
         //new data if available
-        if(Data()) {
-            //only remove data if already used
-            if(wsp::Consumed(replyDataFrame_)) replies_.Pop();
-            //if data in queue make dataframe point to front of queue
-            if(!replies_.Empty()) {
-                wsp::Init(replyDataFrame_, replies_.Front().data(),
-                          replies_.Front().size());
-            }
+        assert(Data());
+        if(reply_.empty()) {
+            reply_ = replies_.Pop();
+            wsp::Init(replyDataFrame_, reply_.data(), reply_.size());
+            wsp::Update(replyDataFrame_, requestedChunkLength);
         }
         return replyDataFrame_;
     }
@@ -106,7 +104,7 @@ public:
         return suggestedWriteChunkSize_;
     }
     bool Sending() const {
-        return false;
+        return !reply_.empty();
     }
     void Destroy() {
         this->~FunService();
@@ -118,9 +116,8 @@ public:
     }
     /// Called by library after data is sent
     void UpdateOutBuffer(size_t requestedChunkLength) {
-        if(!wsp::Update(replyDataFrame_, requestedChunkLength)) {
-            wsp::Reset(replyDataFrame_);
-        }
+        wsp::Update(replyDataFrame_, requestedChunkLength);
+        if(Consumed(replyDataFrame_)) reply_.resize(0);
     }
 private:
     /// destructor, never called through delete since instances of
@@ -128,7 +125,7 @@ private:
     /// and destroyed through a call to Destroy()
     virtual ~FunService() {
         stop_ = true;
-        taskFuture_.wait();
+        if(taskFuture_.valid()) taskFuture_.get(); //get() forwards exceptions
     }
 private:
     SyncQueue< std::vector< char > > requests_;
@@ -139,6 +136,7 @@ private:
     FunT fun_;
     std::future< void > taskFuture_;
     bool stop_ = false;
+    std::vector< char > reply_;
 };
 
 

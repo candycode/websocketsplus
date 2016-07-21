@@ -63,21 +63,13 @@ public:
         //in reply queue
         return !replies_.empty();
     }
-    const DataFrame& Get(int requestedChunkLength) /*const*/ {
-        //if data has been consumed remove entry and pop
-        //new data if available
-        if(Data()) {
-            //only remove data if already used
-            if(wsp::Consumed(replyDataFrame_)) replies_.pop_front();
-            //if data in queue make dataframe point to front of queue
-            if(!replies_.empty()) {
-                wsp::Init(replyDataFrame_, replies_.front().data(),
-                          replies_.front().size());
-            }
-        }
-        //if data available update data frame
-        if(!wsp::Update(replyDataFrame_, requestedChunkLength)) {
-            wsp::Reset(replyDataFrame_);
+    const DataFrame& Get(int requestedChunkLength) {
+        assert(Data());
+        if(reply_.empty()) {
+            reply_ = std::move(replies_.front());
+            replies_.pop_front();
+            wsp::Init(replyDataFrame_, reply_.data(), reply_.size());
+            wsp::Update(replyDataFrame_, requestedChunkLength);
         }
         return replyDataFrame_;
     }
@@ -101,7 +93,7 @@ public:
         return suggestedWriteChunkSize_;
     }
     bool Sending() const {
-        return false;
+        return !reply_.empty();
     }
     void Destroy() {
         this->~FunService();
@@ -111,11 +103,10 @@ public:
     MinDelayBetweenWrites() const {
         return std::chrono::duration< double >(0);
     }
-    /// Called by library after data is sent
+    /// Called by library after data is sent: update buffer region to send
     void UpdateOutBuffer(size_t requestedChunkLength) {
-        if(!wsp::Update(replyDataFrame_, requestedChunkLength)) {
-            wsp::Reset(replyDataFrame_);
-        }
+        wsp::Update(replyDataFrame_, requestedChunkLength);
+        if(Consumed(replyDataFrame_)) reply_.resize(0);
     }
 private:
     /// destructor, never called through delete since instances of
@@ -128,6 +119,7 @@ private:
     std::vector< char > requestBuffer_; //temporary request storage
     int suggestedWriteChunkSize_ = 4096;
     FunT fun_;
+    std::vector< char > reply_;
 };
 
 

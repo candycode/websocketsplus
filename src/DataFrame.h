@@ -59,7 +59,7 @@ struct DataFrame {
 inline bool Update(DataFrame& df, size_t chunkLength) {
     if(df.frameBegin < df.bufferEnd) {
         chunkLength = std::min(chunkLength,
-                               size_t(df.bufferEnd - df.frameBegin));
+                               size_t(df.bufferEnd - df.frameEnd));
         df.frameBegin = df.frameEnd;
         df.frameEnd = df.frameEnd + chunkLength;
         return true;
@@ -74,8 +74,5 @@ inline void Init(DataFrame& df, char* begin, size_t size) {
     df = DataFrame(begin, begin + size, begin, begin, true);
 }
 
-inline void Reset(DataFrame& df) {
-    df.bufferBegin = df.frameEnd;
-}
 
 }

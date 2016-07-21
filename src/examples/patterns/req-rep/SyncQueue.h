@@ -6,6 +6,7 @@
 #include <deque>
 #include <mutex>
 #include <condition_variable>
+#include <cassert>
 
 template < typename T >
 class SyncQueue {
@@ -37,19 +38,10 @@ public:
         queue_.pop_front();
         return e;
     }
-    const T& Front() const {
-        return queue_.front();
-    }
-    T& Front()  {
-        return queue_.front();
-    }
     bool Empty() const {
         std::lock_guard< std::mutex > guard(mutex_);
         return queue_.empty();
     }
-    friend class Executor; //to allow calls to Clear
-private:
-    void Clear() { queue_.clear(); }
 private:
     std::deque< T > queue_;
     mutable std::mutex mutex_;

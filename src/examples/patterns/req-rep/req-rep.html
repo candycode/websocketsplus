@@ -9,28 +9,51 @@
             return String.fromCharCode.apply(null, new Uint8Array(buf));
         }
 
-        $(function() {
 
-           window.WebSocket = window.WebSocket || window.MozWebSocket;
-
+        function Connect(p, ws) {
+           var proto = $("#proto").val();
+           if(!proto || proto.length < 1) proto = p;
+           else {
+               if(p === proto) return;
+           }
+           if(ws) ws.close();
+           try {
            var websocket = new WebSocket('ws://127.0.0.1:9001',
-                                         'reverse');
+                                         proto);
+
 
            websocket.binaryType = "arraybuffer";
 
            websocket.onopen = function () {
                $('h1').css('color', 'green');
            };
-
+           websocket.onclose = function () {
+               $('h1').css('color', 'black');
+           };
            websocket.onerror = function (e) {
                $('h1').css('color', 'red');
                console.log(e.msg);
            };
            websocket.onmessage = function (e) {
                $('#output p').css('font-family', 'Courier New');
-               $('#output p').append($('<p>', { html:  ab2str(e.data) }));
+               $('#output p').html($('<p>', { html:  ab2str(e.data) }));
 
            };
+           $("#proto").val(proto);
+           return websocket;
+           } catch(except) {
+             console.log(except);
+             $('h1').css('color', 'red');
+           }
+         }
+
+
+        $(function() {
+
+           window.WebSocket = window.WebSocket || window.MozWebSocket;
+
+           var websocket = Connect('reverse', null);
+
            function sendText(msg) {
               try {
                 var buffer = new Array();
@@ -41,7 +64,7 @@
                 console.log(except);
               }
            }
-           $('button').click(function(e) {
+           $('#sendbutton').click(function(e) {
               try {
                   e.preventDefault();
                   if($('#text').val().length == 0) return;
@@ -50,6 +73,17 @@
                 console.log(except);
               }
            });
+
+           $('#protobutton').click(function(e) {
+              try {
+                  e.preventDefault();
+                  websocket = Connect(proto, websocket);
+              } catch(except) {
+                console.log(except);
+                $('h1').css('color', 'red');
+              }
+           });
+
         });
        </script>
 </head>
@@ -57,14 +91,15 @@
 <h1>WebSockets request-reply test</h1>
 <form>
     <div>
-        <p>Protocol ('reverse' or 'echo') - not implemented yet</p>
-        <input id="proto" type="text"/>
+        <h3>Protocol ('reverse' or 'echo')</h3>
+        <input id="proto" type="text" value=""/>
+        <button id="protobutton">Connect</button>
     </div>
     <div>
         <h2>Input</h2>
         <input id="text" type="text" />
+        <button id="sendbutton">Send</button>
     </div>
-    <button>Send</button>
 </form>
 <div id="output">
     <h2>Output</h2>
