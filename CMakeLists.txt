@@ -13,3 +13,4 @@ add_executable(example-streaming
                src/examples/example-streaming.cpp ${WS_SOURCES})
 include_directories(src)
 add_executable(reqrep src/examples/patterns/req-rep/sync-req-rep.cpp ${WS_SOURCES})
+add_executable(reqrep-async src/examples/patterns/req-rep/async-req-rep.cpp ${WS_SOURCES})

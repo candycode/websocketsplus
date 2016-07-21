@@ -31,12 +31,15 @@
 #include <WebSocketService.h>
 #include <Context.h>
 #include <DataFrame.h>
-#include <deque>
+#include "SyncQueue.h"
 #include <functional>
 
 #include <cassert>
 #include <vector>
 #include <string>
+
+#include <thread>
+#include <future>
 
 
 //==============================================================================
@@ -54,30 +57,32 @@ public:
     FunService(Context* ctx, const char* protocol = nullptr)
            : replyDataFrame_(nullptr, nullptr, nullptr, nullptr,
                              BINARY_OPTION),
-             fun_(ctx->GetServiceData().template Get< FunT >(protocol)) {
+             fun_(ctx->GetServiceData().template Get< FunT >(protocol)),
+             stop_(false) {
+        auto f = [this]() {
+            while(!this->stop_)
+                this->replies_.Push(this->fun_(this->requests_.Pop()));
+        };
+        taskFuture_ = std::async(std::launch::async, f);
 
     }
     bool PreformattedBuffer() const { return false; }
     bool Data() const {
         //either there is data in reply buffer or there is data
         //in reply queue
-        return !replies_.empty();
+        return !replies_.Empty();
     }
     const DataFrame& Get(int requestedChunkLength) /*const*/ {
         //if data has been consumed remove entry and pop
         //new data if available
         if(Data()) {
             //only remove data if already used
-            if(wsp::Consumed(replyDataFrame_)) replies_.pop_front();
+            if(wsp::Consumed(replyDataFrame_)) replies_.Pop();
             //if data in queue make dataframe point to front of queue
-            if(!replies_.empty()) {
-                wsp::Init(replyDataFrame_, replies_.front().data(),
-                          replies_.front().size());
+            if(!replies_.Empty()) {
+                wsp::Init(replyDataFrame_, replies_.Front().data(),
+                          replies_.Front().size());
             }
-        }
-        //if data available update data frame
-        if(!wsp::Update(replyDataFrame_, requestedChunkLength)) {
-            wsp::Reset(replyDataFrame_);
         }
         return replyDataFrame_;
     }
@@ -90,7 +95,7 @@ public:
                   (const char*) p + len, requestBuffer_.data() + prev);
         //sync execution: data is transformed after read buffer is filled
         if(done) {
-            replies_.push_back(fun_(requestBuffer_));
+            requests_.Push(requestBuffer_);
             requestBuffer_.resize(0);
         }
     }
@@ -121,13 +126,19 @@ private:
     /// destructor, never called through delete since instances of
     /// this class are always created through a placement new call
     /// and destroyed through a call to Destroy()
-    virtual ~FunService() {}
+    virtual ~FunService() {
+        stop_ = true;
+        taskFuture_.wait();
+    }
 private:
-    std::deque< std::vector< char > > replies_;
+    SyncQueue< std::vector< char > > requests_;
+    SyncQueue< std::vector< char > >replies_;
     DataFrame replyDataFrame_;
     std::vector< char > requestBuffer_; //temporary request storage
     int suggestedWriteChunkSize_ = 4096;
     FunT fun_;
+    std::future< void > taskFuture_;
+    bool stop_ = false;
 };
 
 
@@ -199,8 +210,8 @@ int main(int, char**) {
             //protocol->service mapping
             //sync request-reply: at each request a reply is immediately sent
             //to the client
-            WSS::Entry< ReverseService, WSS::REQ_REP >("reverse", readBufferSize),
-            WSS::Entry< EchoService, WSS::REQ_REP >("echo", readBufferSize)
+            WSS::Entry< ReverseService, WSS::ASYNC_REP >("reverse", readBufferSize),
+            WSS::Entry< EchoService, WSS::ASYNC_REP >("echo", readBufferSize)
 
     );
     //start event loop: one iteration every >= 50ms

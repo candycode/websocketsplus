@@ -9,7 +9,6 @@
             return String.fromCharCode.apply(null, new Uint8Array(buf));
         }
 
-        var start, end;
         $(function() {
 
            window.WebSocket = window.WebSocket || window.MozWebSocket;
@@ -28,8 +27,8 @@
                console.log(e.msg);
            };
            websocket.onmessage = function (e) {
-               $('#output').css('font-family', 'Courier New');
-               $('#output').append($('<p>', { html:  ab2str(e.data) }));
+               $('#output p').css('font-family', 'Courier New');
+               $('#output p').append($('<p>', { html:  ab2str(e.data) }));
 
            };
            function sendText(msg) {
@@ -55,19 +54,22 @@
        </script>
 </head>
 <body>
-<h1>WebSockets test</h1>
+<h1>WebSockets request-reply test</h1>
 <form>
     <div>
         <p>Protocol ('reverse' or 'echo') - not implemented yet</p>
         <input id="proto" type="text"/>
     </div>
     <div>
-        <p>Enter text:</p>
+        <h2>Input</h2>
         <input id="text" type="text" />
     </div>
     <button>Send</button>
 </form>
-<div id="output"></div>
+<div id="output">
+    <h2>Output</h2>
+    <p></p>
+</div>
 </body>
 </html>
 
