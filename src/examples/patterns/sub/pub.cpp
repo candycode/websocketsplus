@@ -31,12 +31,19 @@
 #include <WebSocketService.h>
 #include <Context.h>
 #include <DataFrame.h>
-#include <deque>
+#include "SyncQueue.h"
 #include <functional>
 
 #include <cassert>
 #include <vector>
 #include <string>
+
+#include <thread>
+#include <future>
+
+#include <chrono>
+#include <ctime>
+
 
 
 //==============================================================================
@@ -44,32 +51,43 @@ namespace {
     static const bool BINARY_OPTION = false;
 }
 
-using FunT = std::function< std::vector< char > (const std::vector< char >&) >;
-
-template < typename ContextT  >
-class FunService {
+template < template FunT, typename ContextT  >
+class PublishService {
 public:
     using Context = ContextT;
     using DataFrame = wsp::DataFrame;
 public:
-    FunService() = delete;
-    FunService(Context* ctx, const char* protocol = nullptr)
+    PublishService() = delete;
+    PublishService(Context* ctx, const char* protocol = nullptr)
            : replyDataFrame_(nullptr, nullptr, nullptr, nullptr,
                              BINARY_OPTION),
-             fun_(ctx->GetServiceData().Get(protocol)) {
-
+             fun_(ctx->GetServiceData().template Get< FunT >(protocol)),
+             stop_(false) {
+        auto f = [this]() {
+            while(!this->stop_) {
+                //allow for handling requests to e.g. control the
+                //data stream or request status information
+                if(this->requests_.Empty()) {
+                    this->replies_.Push(this->fun_());
+                } else {
+                    this->replies_.Push(this->fun_(this->requests_.Pop()));
+                }
+            }
+        };
+        taskFuture_ = std::async(std::launch::async, f);
     }
     bool PreformattedBuffer() const { return false; }
     bool Data() const {
         //either there is data in reply buffer or there is data
         //in reply queue
-        return !replies_.empty();
+        return !replies_.Empty() || !reply_.empty();
     }
-    const DataFrame& Get(int requestedChunkLength) {
+    const DataFrame& Get(int requestedChunkLength) /*const*/ {
+        //if data has been consumed remove entry and pop
+        //new data if available
         assert(Data());
         if(reply_.empty()) {
-            reply_ = std::move(replies_.front());
-            replies_.pop_front();
+            reply_ = replies_.Pop();
             wsp::Init(replyDataFrame_, reply_.data(), reply_.size());
             wsp::Update(replyDataFrame_, requestedChunkLength);
         }
@@ -84,7 +102,7 @@ public:
                   (const char*) p + len, requestBuffer_.data() + prev);
         //sync execution: data is transformed after read buffer is filled
         if(done) {
-            replies_.push_back(fun_(requestBuffer_));
+            requests_.Push(requestBuffer_);
             requestBuffer_.resize(0);
         }
     }
@@ -98,14 +116,14 @@ public:
         return !reply_.empty();
     }
     void Destroy() {
-        this->~FunService();
+        this->~PublishService();
     }
     /// Minimum delay between consecutive writes in seconds.
     std::chrono::duration< double >
     MinDelayBetweenWrites() const {
         return std::chrono::duration< double >(0);
     }
-    /// Called by library after data is sent: update buffer region to send
+    /// Called by library after data is sent
     void UpdateOutBuffer(size_t requestedChunkLength) {
         wsp::Update(replyDataFrame_, requestedChunkLength);
         if(Consumed(replyDataFrame_)) reply_.resize(0);
@@ -114,13 +132,19 @@ private:
     /// destructor, never called through delete since instances of
     /// this class are always created through a placement new call
     /// and destroyed through a call to Destroy()
-    virtual ~FunService() {}
+    virtual ~FunService() {
+        stop_ = true;
+        if(taskFuture_.valid()) taskFuture_.get(); //get() forwards exceptions
+    }
 private:
-    std::deque< std::vector< char > > replies_;
+    SyncQueue< std::vector< char > > requests_;
+    SyncQueue< std::vector< char > >replies_;
     DataFrame replyDataFrame_;
     std::vector< char > requestBuffer_; //temporary request storage
     int suggestedWriteChunkSize_ = 4096;
     FunT fun_;
+    std::future< void > taskFuture_;
+    bool stop_ = false;
     std::vector< char > reply_;
 };
 
@@ -129,19 +153,33 @@ private:
 //==============================================================================
 
 //------------------------------------------------------------------------------
-///
+
 using namespace std;
 
-FunT reverse = [](const vector< char >& v) {
-    vector< char > ret(v.size());
-    copy(v.rbegin(), v.rend(), ret.begin());
-    return ret;
-};
-FunT echo = [](const vector< char >& v) {
-    return v;
+vector< string > Now() {
+    using namespace std::chrono;
+    const system_clock::time_point now = system_clock::now();
+    out_.str("");
+    const std::time_t tt = system_clock::to_time_t(now);
+    out_ << ctime(&tt);
+    return vector< char >(out_.s);
+}
+
+vector< char > Empty(const vector< char >& ) { return vector< char >(); }
+
+struct FunT {
+    function< vector< char > () > pub;
+    function< vector< char > (const vector< char >& ) > req_rep;
+    vector< char > operator()(const vector< char >& req) const {
+        return req_rep(req);
+    }
+    vector< char > operator()() const {
+        return pub();
+    }
 };
 
-//note template is currently useless since the return type is the same
+
+//note: template is currently useless since the return type is the same
 //for both reverse and echo
 
 //service data provider: 2D index: [protocol name, type]
@@ -149,19 +187,19 @@ FunT echo = [](const vector< char >& v) {
 //instance is created
 struct Functions {
     Functions(const FunT& r, const FunT& e)
-            : reverse(r), echo(e) {}
-    FunT reverse;
-    FunT echo;
-    const FunT& Get(const char* protocol) const {
-        if(protocol == string("reverse")) return this->reverse;
-        else if(protocol == string("echo")) return this->echo;
+            : curtime(r) {}
+    FunT curtime;
+    //add one member function per return type
+    const FunT& Get<(const char* protocol) const {
+        if(protocol == string("time")) return this->time;
         else {
             throw std::domain_error("Protocol " + std::string(protocol)
                                     + " not supported");
         }
     }
-
 };
+
+
 
 int main(int, char**) {
     using namespace wsp;
@@ -175,7 +213,8 @@ int main(int, char**) {
     WSS::SetLogger(log, "NOTICE", "WARNING", "ERROR");
     const int readBufferSize = 4096; //the default anyway
 
-    using Service = FunService< Context< Functions > >;
+    using ReverseService = FunService< FunT, Context< Functions > >;
+    using EchoService    = FunService< FunT, Context< Functions > >;
 
     //init service
     ws.Init(9001, //port
@@ -186,8 +225,8 @@ int main(int, char**) {
             //protocol->service mapping
             //sync request-reply: at each request a reply is immediately sent
             //to the client
-            WSS::Entry< Service, WSS::REQ_REP >("reverse", readBufferSize),
-            WSS::Entry< Service, WSS::REQ_REP >("echo", readBufferSize)
+            WSS::Entry< ReverseService, WSS::ASYNC_REP >("reverse", readBufferSize),
+            WSS::Entry< EchoService, WSS::ASYNC_REP >("echo", readBufferSize)
 
     );
     //start event loop: one iteration every >= 50ms

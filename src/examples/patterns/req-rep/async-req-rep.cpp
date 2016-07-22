@@ -47,7 +47,9 @@ namespace {
     static const bool BINARY_OPTION = false;
 }
 
-template < typename FunT, typename ContextT  >
+using FunT = std::function< std::vector< char > (const std::vector< char >&) >;
+
+template < typename ContextT  >
 class FunService {
 public:
     using Context = ContextT;
@@ -57,7 +59,7 @@ public:
     FunService(Context* ctx, const char* protocol = nullptr)
            : replyDataFrame_(nullptr, nullptr, nullptr, nullptr,
                              BINARY_OPTION),
-             fun_(ctx->GetServiceData().template Get< FunT >(protocol)),
+             fun_(ctx->GetServiceData().Get(protocol)),
              stop_(false) {
         auto f = [this]() {
             while(!this->stop_) {
@@ -147,8 +149,6 @@ private:
 ///
 using namespace std;
 
-using FunT = function< vector< char > (const vector< char >&) >;
-
 FunT reverse = [](const vector< char >& v) {
     vector< char > ret(v.size());
     copy(v.rbegin(), v.rend(), ret.begin());
@@ -169,20 +169,16 @@ struct Functions {
             : reverse(r), echo(e) {}
     FunT reverse;
     FunT echo;
-    template < typename T >
-    const T& Get(const char* protocol) const;
+    const FunT& Get(const char* protocol) const {
+        if(protocol == string("reverse")) return this->reverse;
+        else if(protocol == string("echo")) return this->echo;
+        else {
+            throw std::domain_error("Protocol " + std::string(protocol)
+                                    + " not supported");
+        }
+    }
 };
 
-//add one member function per return type
-template <>
-const FunT& Functions::Get< FunT >(const char* protocol) const {
-    if(protocol == string("reverse")) return this->reverse;
-    else if(protocol == string("echo")) return this->echo;
-    else {
-        throw std::domain_error("Protocol " + std::string(protocol)
-                                + " not supported");
-    }
-}
 
 int main(int, char**) {
     using namespace wsp;
@@ -196,8 +192,7 @@ int main(int, char**) {
     WSS::SetLogger(log, "NOTICE", "WARNING", "ERROR");
     const int readBufferSize = 4096; //the default anyway
 
-    using ReverseService = FunService< FunT, Context< Functions > >;
-    using EchoService    = FunService< FunT, Context< Functions > >;
+    using Service = FunService< Context< Functions > >;
 
     //init service
     ws.Init(9001, //port
@@ -208,8 +203,8 @@ int main(int, char**) {
             //protocol->service mapping
             //sync request-reply: at each request a reply is immediately sent
             //to the client
-            WSS::Entry< ReverseService, WSS::ASYNC_REP >("reverse", readBufferSize),
-            WSS::Entry< EchoService, WSS::ASYNC_REP >("echo", readBufferSize)
+            WSS::Entry< Service, WSS::ASYNC_REP >("reverse", readBufferSize),
+            WSS::Entry< Service, WSS::ASYNC_REP >("echo", readBufferSize)
 
     );
     //start event loop: one iteration every >= 50ms
