@@ -53,27 +53,23 @@ namespace {
 }
 
 template < typename FunT, typename ContextT  >
-class PublishService {
+class SubscriptionService {
 public:
     using Context = ContextT;
     using DataFrame = wsp::DataFrame;
 public:
-    PublishService() = delete;
-    PublishService(Context* ctx, const char* protocol = nullptr)
+    SubscriptionService() = delete;
+    SubscriptionService(Context* ctx, const char* protocol = nullptr)
            : replyDataFrame_(nullptr, nullptr, nullptr, nullptr,
                              BINARY_OPTION),
              fun_(ctx->GetServiceData().Get(protocol)),
              stop_(false) {
         auto f = [this]() {
             while(!this->stop_) {
-                //allow for handling requests to e.g. control the
-                //data stream or request status information
-                if(this->requests_.Empty()) {
-                    this->replies_.Push(this->fun_());
-                } else {
-                    this->replies_.Push(this->fun_(this->requests_.Pop()));
-                }
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                const std::vector< char > req = requests_.Pop();
+                const std::vector< char > res
+                    = this->fun_(req);
+                if(!res.empty()) this->replies_.Push(res);
             }
         };
         taskFuture_ = std::async(std::launch::async, f);
@@ -106,6 +102,7 @@ public:
     }
     /// Called when libwebsockets receives data from clients
     void Put(void* p, size_t len, bool done) {
+        std::cout << "!" << std::endl;
         if(p == nullptr || len == 0) return;
         const size_t prev = requestBuffer_.size();
         requestBuffer_.resize(requestBuffer_.size() + len);
@@ -124,10 +121,10 @@ public:
         return suggestedWriteChunkSize_;
     }
     bool Sending() const {
-        return true;
+        return false;
     }
     void Destroy() {
-        this->~PublishService();
+        this->~SubscriptionService();
     }
     /// Minimum delay between consecutive writes in seconds.
     std::chrono::duration< double >
@@ -147,7 +144,7 @@ private:
     /// destructor, never called through delete since instances of
     /// this class are always created through a placement new call
     /// and destroyed through a call to Destroy()
-    virtual ~PublishService() {
+    virtual ~SubscriptionService() {
         stop_ = true;
         if(taskFuture_.valid()) taskFuture_.get(); //get() forwards exceptions
     }
@@ -171,30 +168,8 @@ private:
 
 using namespace std;
 
-vector< char > Now() {
-    using namespace std::chrono;
-    const system_clock::time_point now = system_clock::now();
-    ostringstream oss("");
-    const std::time_t tt = system_clock::to_time_t(now);
-    oss << ctime(&tt);
-    const string t = oss.str();
-    return vector< char >(t.begin(), t.end());
-}
 
-vector< char > Empty(const vector< char >& ) { return vector< char >(); }
-
-struct Time {
-    function< vector< char > () > pub;
-    function< vector< char > (const vector< char >& ) > req_rep;
-    vector< char > operator()(const vector< char >& req) const {
-        return req_rep(req);
-    }
-    vector< char > operator()() const {
-        return pub();
-    }
-    Time() : pub(Now), req_rep(Empty) {}
-};
-
+using Print = function< vector< char > (const vector< char >&) >;
 
 //note: template is currently useless since the return type is the same
 //for both reverse and echo
@@ -203,12 +178,12 @@ struct Time {
 //this is used to initialize the service when the per-connection service
 //instance is created
 struct Functions {
-    Functions(const Time& r)
-            : curtime(r) {}
-    Time curtime;
+    Functions(const Print& r)
+            : print(r) {}
+    Print print;
     //add one member function per return type
-    const Time& Get(const char* protocol) const {
-        if(protocol == string("time")) return this->curtime;
+    const Print& Get(const char* protocol) const {
+        if(protocol == string("recv")) return this->print;
         else {
             throw std::domain_error("Protocol " + std::string(protocol)
                                     + " not supported");
@@ -230,18 +205,21 @@ int main(int, char**) {
     WSS::SetLogger(log, "NOTICE", "WARNING", "ERROR");
     const int readBufferSize = 4096; //the default anyway
 
-    using Service = PublishService< Time, Context< Functions > >;
+    using Service = SubscriptionService< Print, Context< Functions > >;
 
     //init service
-    ws.Init(9002, //port
+    ws.Init(9003, //port
             nullptr, //SSL certificate path
             nullptr, //SSL key path
             //context instance, will be copied internally
-            MakeContext(Functions(Time())),
+            MakeContext(Functions([](const vector< char >& msg) {
+                cout << string(begin(msg), end(msg)) << endl;
+                return vector< char >();
+            })),
             //protocol->service mapping
             //sync request-reply: at each request a reply is immediately sent
             //to the client
-            WSS::Entry< Service, WSS::ASYNC_REP >("time", readBufferSize)
+            WSS::Entry< Service, WSS::REQ_REP >("recv", readBufferSize)
 
     );
     //start event loop: one iteration every >= 50ms

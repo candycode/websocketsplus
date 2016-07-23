@@ -18,8 +18,8 @@
            }
            if(ws) ws.close();
            try {
-           var websocket = new WebSocket('ws://127.0.0.1:9002',
-                                         "time");
+           var websocket = new WebSocket('ws://127.0.0.1:9003',
+                                         "recv");
 
 
            websocket.binaryType = "arraybuffer";
@@ -63,6 +63,18 @@
                 console.log(except);
               }
            }
+
+           function getTime() {return "16:01";}
+           //while(true) {
+
+             //setTimeout(function () { sendText(getTime()); }, 1000);
+
+           //}
+           sendText(getTime());
+           sendText(getTime());
+
+
+
         });
        </script>
 </head>

@@ -11,6 +11,7 @@
 template < typename T >
 class SyncQueue {
 public:
+    ///@todo add move semantics
     void Push(const T& e) {
         std::lock_guard< std::mutex > guard(mutex_);
         queue_.push_back(e);
