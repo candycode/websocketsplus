@@ -31,7 +31,7 @@
 #include <WebSocketService.h>
 #include <Context.h>
 #include <DataFrame.h>
-#include "SyncQueue.h"
+#include "../SyncQueue.h"
 #include <functional>
 
 #include <cassert>

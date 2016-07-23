@@ -70,8 +70,8 @@ inline bool Consumed(const DataFrame& df) {
     return df.bufferEnd && df.frameEnd >= df.bufferEnd;
 }
 
-inline void Init(DataFrame& df, char* begin, size_t size) {
-    df = DataFrame(begin, begin + size, begin, begin, true);
+inline void Init(DataFrame& df, char* begin, size_t size, bool binary = true) {
+    df = DataFrame(begin, begin + size, begin, begin, binary);
 }
 
 

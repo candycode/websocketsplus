@@ -39,7 +39,7 @@ public:
         return e;
     }
     bool Empty() const {
-        std::lock_guard< std::mutex > guard(mutex_);
+        //std::lock_guard< std::mutex > guard(mutex_);
         return queue_.empty();
     }
 private:

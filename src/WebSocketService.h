@@ -31,6 +31,8 @@
 
 #include <libwebsockets.h>
 
+#include <iostream>
+
 namespace wsp {
 
 using Protocols = std::vector< lws_protocols >;
@@ -561,6 +563,8 @@ private:
                 std::vector< char >& buffer = c->GetBuffer(user, 0);
                 buffer.resize(LWS_SEND_BUFFER_PRE_PADDING + bsize +
                               LWS_SEND_BUFFER_POST_PADDING);
+                //std::cout << bsize << std::endl;
+                //memset(buffer.data(), 0, buffer.size());
                 std::copy(df.frameBegin, df.frameEnd, buffer.begin()
                                                 + LWS_SEND_BUFFER_PRE_PADDING);
                 
@@ -658,7 +662,9 @@ int WebSocketService::WSCallback(
             // libwesockets of size = sizeof(S), see
             new (user) S(c, lws_get_protocol(wsi)->name);
             const S* s = reinterpret_cast< const S* >(user);
-            if(s->Sending()) {
+            //schedule read in case of async reply to schedule
+            //first write callback
+            if(s->Sending() || type == Type::ASYNC_REP) {
                 lws_callback_on_writable(wsi);
             }
         }

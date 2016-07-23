@@ -18,8 +18,8 @@
            }
            if(ws) ws.close();
            try {
-           var websocket = new WebSocket('ws://127.0.0.1:9001',
-                                         proto);
+           var websocket = new WebSocket('ws://127.0.0.1:9002',
+                                         "time");
 
 
            websocket.binaryType = "arraybuffer";
@@ -36,7 +36,7 @@
            };
            websocket.onmessage = function (e) {
                $('#output p').css('font-family', 'Courier New');
-               $('#output p').html($('<p>', { html:  ab2str(e.data) }));
+               $('#output').html($('<p>', { html:  ab2str(e.data)}));
 
            };
            $("#proto").val(proto);
@@ -47,12 +47,11 @@
            }
          }
 
-
         $(function() {
 
            window.WebSocket = window.WebSocket || window.MozWebSocket;
 
-           var websocket = Connect('reverse', null);
+           var websocket = Connect('time', null);
 
            function sendText(msg) {
               try {
@@ -89,20 +88,8 @@
 </head>
 <body>
 <h1>WebSockets request-reply test</h1>
-<form>
-    <div>
-        <h3>Protocol ('reverse' or 'echo')</h3>
-        <input id="proto" type="text" value=""/>
-        <button id="protobutton">Connect</button>
-    </div>
-    <div>
-        <h2>Input</h2>
-        <input id="text" type="text" />
-        <button id="sendbutton">Send</button>
-    </div>
-</form>
 <div id="output">
-    <h2>Output</h2>
+    <h2>Time</h2>
     <p></p>
 </div>
 </body>

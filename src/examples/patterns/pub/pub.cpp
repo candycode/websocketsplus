@@ -31,8 +31,9 @@
 #include <WebSocketService.h>
 #include <Context.h>
 #include <DataFrame.h>
-#include "SyncQueue.h"
+#include "../SyncQueue.h"
 #include <functional>
+#include <sstream>
 
 #include <cassert>
 #include <vector>
@@ -48,10 +49,10 @@
 
 //==============================================================================
 namespace {
-    static const bool BINARY_OPTION = false;
+    static const bool BINARY_OPTION = true;
 }
 
-template < template FunT, typename ContextT  >
+template < typename FunT, typename ContextT  >
 class PublishService {
 public:
     using Context = ContextT;
@@ -61,10 +62,10 @@ public:
     PublishService(Context* ctx, const char* protocol = nullptr)
            : replyDataFrame_(nullptr, nullptr, nullptr, nullptr,
                              BINARY_OPTION),
-             fun_(ctx->GetServiceData().template Get< FunT >(protocol)),
+             fun_(ctx->GetServiceData().Get(protocol)),
              stop_(false) {
         auto f = [this]() {
-            while(!this->stop_) {
+            while(true/*!this->stop_*/) {
                 //allow for handling requests to e.g. control the
                 //data stream or request status information
                 if(this->requests_.Empty()) {
@@ -72,6 +73,7 @@ public:
                 } else {
                     this->replies_.Push(this->fun_(this->requests_.Pop()));
                 }
+                std::this_thread::sleep_for(std::chrono::seconds(1));
             }
         };
         taskFuture_ = std::async(std::launch::async, f);
@@ -85,11 +87,20 @@ public:
     const DataFrame& Get(int requestedChunkLength) /*const*/ {
         //if data has been consumed remove entry and pop
         //new data if available
-        assert(Data());
-        if(reply_.empty()) {
+        //assert(Data());
+        if(replyDataFrame_.bufferBegin == nullptr) {
             reply_ = replies_.Pop();
-            wsp::Init(replyDataFrame_, reply_.data(), reply_.size());
-            wsp::Update(replyDataFrame_, requestedChunkLength);
+            replyDataFrame_.bufferBegin = reply_.data();
+            replyDataFrame_.bufferEnd   = reply_.data() + reply_.size();
+            replyDataFrame_.frameBegin  = replyDataFrame_.bufferBegin;
+            replyDataFrame_.frameEnd    = replyDataFrame_.frameBegin +
+                    std::min(requestedChunkLength, int(reply_.size()));
+        } else if(replyDataFrame_.frameEnd < replyDataFrame_.bufferEnd) {
+            DataFrame& df = replyDataFrame_;
+            const int inc =
+                    std::min(requestedChunkLength,
+                             int(df.bufferEnd - df.frameEnd));
+            df.frameEnd += inc;
         }
         return replyDataFrame_;
     }
@@ -113,7 +124,7 @@ public:
         return suggestedWriteChunkSize_;
     }
     bool Sending() const {
-        return !reply_.empty();
+        return true;
     }
     void Destroy() {
         this->~PublishService();
@@ -124,15 +135,19 @@ public:
         return std::chrono::duration< double >(0);
     }
     /// Called by library after data is sent
-    void UpdateOutBuffer(size_t requestedChunkLength) {
-        wsp::Update(replyDataFrame_, requestedChunkLength);
-        if(Consumed(replyDataFrame_)) reply_.resize(0);
+    void UpdateOutBuffer(size_t bytesConsumed) {
+        replyDataFrame_.frameBegin += bytesConsumed;
+        replyDataFrame_.frameEnd = replyDataFrame_.frameBegin;
+        if(replyDataFrame_.frameBegin >= replyDataFrame_.bufferEnd) {
+            replyDataFrame_ = DataFrame(nullptr, nullptr, nullptr, nullptr,
+                                        BINARY_OPTION);
+        }
     }
 private:
     /// destructor, never called through delete since instances of
     /// this class are always created through a placement new call
     /// and destroyed through a call to Destroy()
-    virtual ~FunService() {
+    virtual ~PublishService() {
         stop_ = true;
         if(taskFuture_.valid()) taskFuture_.get(); //get() forwards exceptions
     }
@@ -156,18 +171,19 @@ private:
 
 using namespace std;
 
-vector< string > Now() {
+vector< char > Now() {
     using namespace std::chrono;
     const system_clock::time_point now = system_clock::now();
-    out_.str("");
+    ostringstream oss("");
     const std::time_t tt = system_clock::to_time_t(now);
-    out_ << ctime(&tt);
-    return vector< char >(out_.s);
+    oss << ctime(&tt);
+    const string t = oss.str();
+    return vector< char >(t.begin(), t.end());
 }
 
 vector< char > Empty(const vector< char >& ) { return vector< char >(); }
 
-struct FunT {
+struct Time {
     function< vector< char > () > pub;
     function< vector< char > (const vector< char >& ) > req_rep;
     vector< char > operator()(const vector< char >& req) const {
@@ -176,6 +192,7 @@ struct FunT {
     vector< char > operator()() const {
         return pub();
     }
+    Time() : pub(Now), req_rep(Empty) {}
 };
 
 
@@ -186,12 +203,12 @@ struct FunT {
 //this is used to initialize the service when the per-connection service
 //instance is created
 struct Functions {
-    Functions(const FunT& r, const FunT& e)
+    Functions(const Time& r)
             : curtime(r) {}
-    FunT curtime;
+    Time curtime;
     //add one member function per return type
-    const FunT& Get<(const char* protocol) const {
-        if(protocol == string("time")) return this->time;
+    const Time& Get(const char* protocol) const {
+        if(protocol == string("time")) return this->curtime;
         else {
             throw std::domain_error("Protocol " + std::string(protocol)
                                     + " not supported");
@@ -213,20 +230,18 @@ int main(int, char**) {
     WSS::SetLogger(log, "NOTICE", "WARNING", "ERROR");
     const int readBufferSize = 4096; //the default anyway
 
-    using ReverseService = FunService< FunT, Context< Functions > >;
-    using EchoService    = FunService< FunT, Context< Functions > >;
+    using Service = PublishService< Time, Context< Functions > >;
 
     //init service
-    ws.Init(9001, //port
+    ws.Init(9002, //port
             nullptr, //SSL certificate path
             nullptr, //SSL key path
             //context instance, will be copied internally
-            MakeContext(Functions(::reverse, echo)),
+            MakeContext(Functions(Time())),
             //protocol->service mapping
             //sync request-reply: at each request a reply is immediately sent
             //to the client
-            WSS::Entry< ReverseService, WSS::ASYNC_REP >("reverse", readBufferSize),
-            WSS::Entry< EchoService, WSS::ASYNC_REP >("echo", readBufferSize)
+            WSS::Entry< Service, WSS::ASYNC_REP >("time", readBufferSize)
 
     );
     //start event loop: one iteration every >= 50ms

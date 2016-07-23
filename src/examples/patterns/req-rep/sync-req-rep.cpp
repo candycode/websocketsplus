@@ -106,8 +106,8 @@ public:
         return std::chrono::duration< double >(0);
     }
     /// Called by library after data is sent: update buffer region to send
-    void UpdateOutBuffer(size_t requestedChunkLength) {
-        wsp::Update(replyDataFrame_, requestedChunkLength);
+    void UpdateOutBuffer(size_t consumedBytes) {
+        wsp::Update(replyDataFrame_, consumedBytes);
         if(Consumed(replyDataFrame_)) reply_.resize(0);
     }
 private:
