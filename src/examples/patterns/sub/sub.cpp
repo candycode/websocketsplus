@@ -102,7 +102,6 @@ public:
     }
     /// Called when libwebsockets receives data from clients
     void Put(void* p, size_t len, bool done) {
-        std::cout << "!" << std::endl;
         if(p == nullptr || len == 0) return;
         const size_t prev = requestBuffer_.size();
         requestBuffer_.resize(requestBuffer_.size() + len);
@@ -121,7 +120,7 @@ public:
         return suggestedWriteChunkSize_;
     }
     bool Sending() const {
-        return false;
+        return Data();
     }
     void Destroy() {
         this->~SubscriptionService();

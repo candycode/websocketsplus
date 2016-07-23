@@ -690,7 +690,6 @@ int WebSocketService::WSCallback(
         }
         break;
         case LWS_CALLBACK_RECEIVE: {
-            std::cout << "!!!!" << std::endl;
             S* s = reinterpret_cast< S* >(user);
             const bool done = lws_remaining_packet_payload(wsi) == 0;
             s->Put(in, len, done);

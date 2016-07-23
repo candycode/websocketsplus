@@ -64,26 +64,28 @@
               }
            }
 
-           function getTime() {return "16:01";}
-           //while(true) {
-
-             //setTimeout(function () { sendText(getTime()); }, 1000);
-
-           //}
-           sendText(getTime());
-           sendText(getTime());
-
-
+           $('#sendbutton').click(function(e) {
+              try {
+                  e.preventDefault();
+                  if($('#text').val().length == 0) return;
+                  sendText($('#text').val());
+              } catch(except) {
+                console.log(except);
+              }
+           });
 
         });
        </script>
 </head>
 <body>
 <h1>WebSockets request-reply test</h1>
-<div id="output">
-    <h2>Time</h2>
-    <p></p>
-</div>
+<form>
+    <div>
+        <h2>Input</h2>
+        <input id="text" type="text" />
+        <button id="sendbutton">Send</button>
+    </div>
+</form>
 </body>
 </html>
 
