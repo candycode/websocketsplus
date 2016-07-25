@@ -44,7 +44,7 @@
 
 //==============================================================================
 namespace {
-    static const bool BINARY_OPTION = false;
+    static const bool BINARY_OPTION = true;
 }
 
 using FunT = std::function< std::vector< char > (const std::vector< char >&) >;
@@ -106,7 +106,7 @@ public:
         return suggestedWriteChunkSize_;
     }
     bool Sending() const {
-        return !reply_.empty();
+        return true;
     }
     void Destroy() {
         this->~FunService();
