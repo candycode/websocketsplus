@@ -76,14 +76,16 @@ public:
         return !replies_.Empty() || !reply_.empty();
     }
     const DataFrame& Get(int requestedChunkLength) /*const*/ {
-        //if data has been consumed remove entry and pop
-        //new data if available
+        //begin pointer is moved by WebSocketService::Send method through
+        //UpdateOutBuffer method after data is sent
+        //
+        //end pointer is moved here through Update function
         assert(Data());
         if(reply_.empty()) {
             reply_ = replies_.Pop();
             wsp::Init(replyDataFrame_, reply_.data(), reply_.size());
             wsp::Update(replyDataFrame_, requestedChunkLength);
-        }
+        } else wsp::Update(replyDataFrame_, requestedChunkLength);
         return replyDataFrame_;
     }
     /// Called when libwebsockets receives data from clients
@@ -117,9 +119,15 @@ public:
         return std::chrono::duration< double >(0);
     }
     /// Called by library after data is sent
-    void UpdateOutBuffer(size_t requestedChunkLength) {
-        wsp::Update(replyDataFrame_, requestedChunkLength);
-        if(Consumed(replyDataFrame_)) reply_.resize(0);
+    void UpdateOutBuffer(size_t bytesConsumed) {
+        wsp::Consume(replyDataFrame_, bytesConsumed);
+        if(wsp::Consumed(replyDataFrame_)) {
+            reply_.resize(0);
+        }
+    }
+    std::future< void > Stop() {
+        stop_ = true;
+        return taskFuture_.get();
     }
 private:
     /// destructor, never called through delete since instances of

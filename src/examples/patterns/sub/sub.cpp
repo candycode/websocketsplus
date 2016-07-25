@@ -81,23 +81,16 @@ public:
         return !replies_.Empty() || !reply_.empty();
     }
     const DataFrame& Get(int requestedChunkLength) /*const*/ {
-        //if data has been consumed remove entry and pop
-        //new data if available
-        //assert(Data());
-        if(replyDataFrame_.bufferBegin == nullptr) {
+        //begin pointer is moved by WebSocketService::Send method through
+        //UpdateOutBuffer method after data is sent
+        //
+        //end pointer is moved here through Update function
+        assert(Data());
+        if(reply_.empty()) {
             reply_ = replies_.Pop();
-            replyDataFrame_.bufferBegin = reply_.data();
-            replyDataFrame_.bufferEnd   = reply_.data() + reply_.size();
-            replyDataFrame_.frameBegin  = replyDataFrame_.bufferBegin;
-            replyDataFrame_.frameEnd    = replyDataFrame_.frameBegin +
-                    std::min(requestedChunkLength, int(reply_.size()));
-        } else if(replyDataFrame_.frameEnd < replyDataFrame_.bufferEnd) {
-            DataFrame& df = replyDataFrame_;
-            const int inc =
-                    std::min(requestedChunkLength,
-                             int(df.bufferEnd - df.frameEnd));
-            df.frameEnd += inc;
-        }
+            wsp::Init(replyDataFrame_, reply_.data(), reply_.size());
+            wsp::Update(replyDataFrame_, requestedChunkLength);
+        } else wsp::Update(replyDataFrame_, requestedChunkLength);
         return replyDataFrame_;
     }
     /// Called when libwebsockets receives data from clients
@@ -132,11 +125,9 @@ public:
     }
     /// Called by library after data is sent
     void UpdateOutBuffer(size_t bytesConsumed) {
-        replyDataFrame_.frameBegin += bytesConsumed;
-        replyDataFrame_.frameEnd = replyDataFrame_.frameBegin;
-        if(replyDataFrame_.frameBegin >= replyDataFrame_.bufferEnd) {
-            replyDataFrame_ = DataFrame(nullptr, nullptr, nullptr, nullptr,
-                                        BINARY_OPTION);
+        wsp::Consume(replyDataFrame_, bytesConsumed);
+        if(wsp::Consumed(replyDataFrame_)) {
+            reply_.resize(0);
         }
     }
 private:

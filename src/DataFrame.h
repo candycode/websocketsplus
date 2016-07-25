@@ -56,23 +56,31 @@ struct DataFrame {
       frameBegin(fb), frameEnd(fe), binary(b) {}
 };
 
-inline bool Update(DataFrame& df, size_t chunkLength) {
-    if(df.frameBegin < df.bufferEnd) {
-        chunkLength = std::min(chunkLength,
-                               size_t(df.bufferEnd - df.frameEnd));
-        df.frameBegin = df.frameEnd;
-        df.frameEnd = df.frameEnd + chunkLength;
-        return true;
-    } else return false;
+inline bool Empty(const DataFrame& df) {
+    return df.bufferBegin == nullptr;
 }
 
 inline bool Consumed(const DataFrame& df) {
-    return df.bufferEnd && df.frameEnd >= df.bufferEnd;
+    return !Empty(df) && df.frameBegin >= df.bufferEnd;
+}
+
+inline void Update(DataFrame& df, size_t chunkLength) {
+    if(Empty(df) || Consumed(df)) return;
+    df.frameEnd = std::min(df.bufferEnd, df.frameEnd + chunkLength);
+}
+
+inline void Consume(DataFrame& df, size_t chunkLength) {
+    if(Empty(df) || Consumed(df)) return;
+    df.frameBegin = std::min(df.bufferEnd, df.frameBegin + chunkLength);
+    df.frameEnd = df.frameBegin;
 }
 
 inline void Init(DataFrame& df, char* begin, size_t size, bool binary = true) {
     df = DataFrame(begin, begin + size, begin, begin, binary);
 }
 
+inline void Reset(DataFrame& df, bool binary) {
+    df = DataFrame(nullptr, nullptr, nullptr, nullptr, binary);
+}
 
 }
