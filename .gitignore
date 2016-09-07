@@ -12,6 +12,6 @@
 *.la
 *.a
 .DS_Store
-tmp-*
+tmp*
 .*
 .idea
